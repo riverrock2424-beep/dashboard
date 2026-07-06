@@ -27,15 +27,8 @@ Contact: rowan.wisere@gmail.com
 const CONFIG = {
   appTitle: "Water Coach",
 
-  // Default unit. Options: "bottle" | "glass" | "oz" | "ml"
-  unit: "bottle",
-
-  // Volume per "bottle" / "glass" in ml. 500 = standard water bottle,
-  // 250 = a typical drinking glass.
-  bottleMl: 500,
-  glassMl: 250,
-
-  // Volume added per tap when displaying water as raw "ml".
+  // Volume added per tap of the + button, in ml. This is the only unit —
+  // no bottles/glasses/oz, just ml.
   mlIncrement: 100,
 
   // Default user profile (gets overwritten by what you save in Settings).
@@ -628,25 +621,6 @@ html, body {
     <div class="set-section">
       <h4>Display</h4>
       <div class="field">
-        <label>Show water as</label>
-        <div class="seg" id="setUnit">
-          <button data-u="bottle">Bottles</button>
-          <button data-u="glass">Glasses</button>
-          <button data-u="oz">oz</button>
-          <button data-u="ml">ml</button>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Bottle size (ml)</label>
-          <input type="number" id="setBottleMl" min="100" max="2000" step="50">
-        </div>
-        <div class="field">
-          <label>Glass size (ml)</label>
-          <input type="number" id="setGlassMl" min="100" max="500" step="10">
-        </div>
-      </div>
-      <div class="field">
         <label>ml increment (per tap)</label>
         <input type="number" id="setMlIncrement" min="10" max="1000" step="10">
       </div>
@@ -793,9 +767,6 @@ html, body {
   }
   function normalize(s) {
     s = s || {};
-    s.unit = s.unit || CONFIG.unit || 'bottle';
-    s.bottleMl = s.bottleMl || CONFIG.bottleMl || 500;
-    s.glassMl  = s.glassMl  || CONFIG.glassMl  || 250;
     s.mlIncrement = s.mlIncrement || CONFIG.mlIncrement || 100;
     s.weightUnit = s.weightUnit || 'kg';
     s.profile = Object.assign({}, CONFIG.profile, s.profile || {});
@@ -848,24 +819,6 @@ html, body {
     };
   }
 
-  function unitVolMl() {
-    if (state.unit === 'bottle') return state.bottleMl || 500;
-    if (state.unit === 'glass')  return state.glassMl  || 250;
-    if (state.unit === 'oz')     return 30;     // 1 fl oz ≈ 29.57 ml
-    return state.mlIncrement || 100;            // ml, in user-configurable increments
-  }
-  function unitLabelPlural() {
-    if (state.unit === 'bottle') return 'bottles';
-    if (state.unit === 'glass')  return 'glasses';
-    if (state.unit === 'oz')     return 'oz';
-    return 'ml';
-  }
-  function unitLabelSingular() {
-    if (state.unit === 'bottle') return 'bottle';
-    if (state.unit === 'glass')  return 'glass';
-    if (state.unit === 'oz')     return 'oz';
-    return 'ml';
-  }
   function fmtMl(ml) {
     if (ml >= 1000) return (ml / 1000).toFixed(1) + ' L';
     return Math.round(ml) + ' ml';
@@ -883,34 +836,25 @@ html, body {
 
   function renderWater() {
     const calc = computeTargetMl();
-    const targetUnits = Math.ceil(calc.total / unitVolMl());
     const count = todayCount();
-    const unitName = unitLabelPlural();
-    const isMl = state.unit === 'ml';
-    const drankMl = count * unitVolMl();
+    const drankMl = count * (state.mlIncrement || 100);
     const targetMl = Math.round(calc.total);
 
-    $('waterUnitLabel').textContent = unitName.toUpperCase() + ' DRANK TODAY';
-    if (isMl) {
-      $('waterNum').textContent = drankMl;
-    } else {
-      $('waterNum').textContent = count;
-    }
-    // Target is always shown in ml, regardless of unit mode — the number
-    // that actually matters day to day, not an arbitrary "/ 3" bottle count.
+    $('waterUnitLabel').textContent = 'ML DRANK TODAY';
+    $('waterNum').textContent = drankMl;
     $('waterTarget').textContent = '/ ' + targetMl + ' ml';
-    $('waterPlusLabel').textContent = isMl ? ('Drank ' + (state.mlIncrement || 100) + ' ml') : 'Drank a ' + unitLabelSingular();
+    $('waterPlusLabel').textContent = 'Drank ' + (state.mlIncrement || 100) + ' ml';
 
-    // Progress bar with three zones: low (0-65%), healthy (65-100%), over (100-150%)
-    const pctRaw = (count / targetUnits) * 100;
+    // Progress bar with three zones: low (0-65%), healthy (65-100%), over (100-150%).
+    // Computed directly from ml so it can never drift from the displayed
+    // numbers regardless of what mlIncrement is set to.
+    const pctRaw = targetMl > 0 ? (drankMl / targetMl) * 100 : 0;
     const fillPct = Math.min(150, pctRaw) / 1.5;   // bar represents 0-150%
     const fill = $('waterBarFill');
     fill.style.width = fillPct + '%';
     fill.classList.toggle('over', pctRaw > 100);
-    $('waterBarMin').textContent = isMl ? '0 ml' : '0';
-    $('waterBarMax').textContent = isMl
-      ? (Math.ceil(targetMl * 1.5)) + '+ ml'
-      : (Math.ceil(targetUnits * 1.5)) + '+';
+    $('waterBarMin').textContent = '0 ml';
+    $('waterBarMax').textContent = (Math.ceil(targetMl * 1.5)) + '+ ml';
     // Healthy zone bands at 65% and 100%
     $('waterBarZoneStart').style.left = (65 / 1.5) + '%';
     $('waterBarZoneEnd').style.left   = (100 / 1.5) + '%';
@@ -920,9 +864,7 @@ html, body {
     if (count === 0) { helper.textContent = 'Start the day — first one in.'; helper.classList.remove('good'); }
     else if (pctRaw < 50) { helper.textContent = 'Behind pace — drink one in the next hour.'; helper.classList.remove('good'); }
     else if (pctRaw < 100) {
-      helper.textContent = isMl
-        ? (Math.max(0, targetMl - drankMl) + ' ml to go. Pacing well.')
-        : ((targetUnits - count) + ' to go. Pacing well.');
+      helper.textContent = Math.max(0, targetMl - drankMl) + ' ml to go. Pacing well.';
       helper.classList.remove('good');
     }
     else if (pctRaw < 130) { helper.textContent = '✓ Target hit — top up if you train this evening.'; helper.classList.add('good'); }
@@ -931,12 +873,12 @@ html, body {
     // Disable minus when at zero
     $('waterMinusBtn').disabled = count <= 0;
 
-    renderWhy(calc, targetUnits);
+    renderWhy(calc);
     renderHistory();
-    renderSparkline(targetUnits);
+    renderSparkline(targetMl);
   }
 
-  function renderWhy(calc, targetUnits) {
+  function renderWhy(calc) {
     const wrap = $('whyBody');
     const u = state.weightUnit;
     const wDisp = u === 'lb' ? (state.profile.weightKg).toFixed(0) : state.profile.weightKg.toFixed(0);
@@ -951,31 +893,32 @@ html, body {
     });
     if (calc.adjust > 0)
       html += '<div class="why-row"><span class="why-label">+ Sex / age adjustment</span><span class="why-val">+ ' + fmtMl(calc.adjust) + '</span></div>';
-    html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + fmtMl(calc.total) + ' → ' + targetUnits + ' ' + unitLabelPlural() + '</span></div>';
+    html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + fmtMl(calc.total) + '</span></div>';
     wrap.innerHTML = html;
   }
 
   function renderHistory() {
     const list = $('histList');
-    const target = Math.ceil(computeTargetMl().total / unitVolMl());
+    const target = Math.round(computeTargetMl().total);
+    const inc = state.mlIncrement || 100;
     // Last 7 days
     const days = [];
     for (let i = 6; i >= 1; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const k = dateKey(d);
-      const n = state.logs[k] || 0;
-      days.push({ date: d, key: k, count: n });
+      const ml = (state.logs[k] || 0) * inc;
+      days.push({ date: d, key: k, ml });
     }
-    list.innerHTML = days.map(({date, count}) => {
+    list.innerHTML = days.map(({date, ml}) => {
       const dows = ['Sun','Mon','Tue','Wed','THU','Fri','Sat'];
       const lbl = dows[date.getDay()] + ' ' + (date.getMonth()+1) + '/' + date.getDate();
-      const pct = Math.min(100, (count / target) * 100);
-      const cls = (count >= target) ? '' : 'miss';
+      const pct = Math.min(100, (ml / target) * 100);
+      const cls = (ml >= target) ? '' : 'miss';
       return '<div class="hist-row">'
         + '<span class="hist-date">' + lbl + '</span>'
         + '<div class="hist-bar-wrap"><div class="hist-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
-        + '<span class="hist-count">' + count + '/' + target + '</span>'
+        + '<span class="hist-count">' + ml + '/' + target + 'ml</span>'
         + '</div>';
     }).join('') || '<div style="text-align:center;font-size:12px;color:var(--text-3);padding:12px 0">No logs yet.</div>';
   }
@@ -984,12 +927,13 @@ html, body {
     const svg = $('sparkSvg');
     const W = 280, H = 70, pad = 4;
     const days = 14;
+    const inc = state.mlIncrement || 100;
     const data = [];
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const k = dateKey(d);
-      data.push(state.logs[k] || 0);
+      data.push((state.logs[k] || 0) * inc);
     }
     const maxVal = Math.max(target, Math.max.apply(null, data)) || 1;
     const colW = (W - pad * 2) / data.length;
@@ -1040,11 +984,8 @@ html, body {
     $('setAge').value = state.profile.age;
     $('setActivity').value = state.profile.activityHrsPerWeek;
     $('setCaffeine').value = state.caffeineMgPerDay;
-    $('setBottleMl').value = state.bottleMl;
-    $('setGlassMl').value = state.glassMl;
     $('setMlIncrement').value = state.mlIncrement;
 
-    setSegActive('setUnit', state.unit);
     setSegActive('setWeightUnit', state.weightUnit);
     setSegActive('setSex', state.profile.sex);
 
@@ -1066,19 +1007,16 @@ html, body {
       });
     });
   }
-  bindSeg('setUnit', 'u', (v) => { state.unit = v; saveState(); renderWater(); });
   bindSeg('setWeightUnit', 'u', (v) => { state.weightUnit = v; saveState(); renderWater(); });
   bindSeg('setSex', 's', (v) => { state.profile.sex = v; saveState(); renderWater(); });
 
-  ['setWeight','setAge','setActivity','setCaffeine','setBottleMl','setGlassMl','setMlIncrement'].forEach(id => {
+  ['setWeight','setAge','setActivity','setCaffeine','setMlIncrement'].forEach(id => {
     $(id).addEventListener('input', () => {
       const v = parseFloat($(id).value);
       if (id === 'setWeight') state.profile.weightKg = v || 0;
       else if (id === 'setAge') state.profile.age = v || 0;
       else if (id === 'setActivity') state.profile.activityHrsPerWeek = v || 0;
       else if (id === 'setCaffeine') state.caffeineMgPerDay = v || 0;
-      else if (id === 'setBottleMl') state.bottleMl = v || 500;
-      else if (id === 'setGlassMl') state.glassMl = v || 250;
       else if (id === 'setMlIncrement') state.mlIncrement = v || 100;
       saveState(); renderWater();
     });

@@ -254,12 +254,15 @@ body.topbar-modal-open {
     return { done, total: 1 };
   }
 
+  // Returns { done, total } in ml — water.html is ml-only now, no more
+  // bottle/glass/oz unit concept to convert through.
   function getWaterProgress() {
     let state = null;
     try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
     if (!state) return { done: 0, total: 0 };
     const todayKey = calendarDateKey();
-    const done = (state.logs || {})[todayKey] || 0;
+    const taps = (state.logs || {})[todayKey] || 0;
+    const doneMl = taps * (state.mlIncrement || 100);
     const p = state.profile || { weightKg: 75 };
     const wKg = state.weightUnit === 'lb' ? (p.weightKg || 0) / 2.20462 : (p.weightKg || 0);
     const base = wKg * 35;
@@ -273,13 +276,13 @@ body.topbar-modal-open {
     if (p.sex === 'm') adjust += 200;
     if ((p.age || 0) >= 50) adjust += 100;
     const totalMl = base + exercise + caffeine + subs + adjust;
-    let unitVol;
-    if (state.unit === 'glass') unitVol = state.glassMl || 250;
-    else if (state.unit === 'oz') unitVol = 30;
-    else if (state.unit === 'ml') unitVol = state.mlIncrement || 100;
-    else unitVol = state.bottleMl || 500;
-    const total = Math.max(1, Math.ceil(totalMl / unitVol));
-    return { done, total };
+    return { done: doneMl, total: Math.max(1, Math.round(totalMl)) };
+  }
+
+  // Compact ml formatter for the topbar pill's tight space (e.g. "1.2L").
+  function fmtMlCompact(ml) {
+    if (ml >= 1000) return (ml / 1000).toFixed(1) + 'L';
+    return Math.round(ml) + 'ml';
   }
 
   function classifyStatus(done, total) {
@@ -316,7 +319,7 @@ body.topbar-modal-open {
     document.getElementById('topbarMeditateCount').textContent =
       medi.done + '/' + medi.total;
     document.getElementById('topbarWaterCount').textContent =
-      w.total ? w.done + '/' + w.total : '0/0';
+      w.total ? fmtMlCompact(w.done) + '/' + fmtMlCompact(w.total) : '0/0';
 
     setPillStatus(goalsEl, classifyStatus(g.done, g.total));
     setPillStatus(gymEl, classifyStatus(gym.done, gym.total));
@@ -327,7 +330,7 @@ body.topbar-modal-open {
   // -------- Water +1 (works from any page) --------
   function defaultWaterState() {
     return {
-      unit: 'bottle', bottleMl: 500, glassMl: 250, mlIncrement: 100, weightUnit: 'kg',
+      mlIncrement: 100, weightUnit: 'kg',
       profile: { weightKg: 75, age: 25, sex: 'm', activityHrsPerWeek: 5 },
       caffeineMgPerDay: 200, substances: [], logs: {}
     };
