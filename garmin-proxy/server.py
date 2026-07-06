@@ -201,4 +201,8 @@ def garmin_data():
 
 
 if __name__ == "__main__":
-    app.run(port=PORT, debug=False)
+    # host=0.0.0.0 so this is reachable from outside the machine (needed on
+    # Render; harmless for local use — 127.0.0.1 still works too). Only used
+    # when running `python server.py` directly; Render runs this via
+    # gunicorn instead, which imports `app` and never executes this block.
+    app.run(host="0.0.0.0", port=PORT, debug=False)
