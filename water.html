@@ -893,11 +893,12 @@ html, body {
     $('waterUnitLabel').textContent = unitName.toUpperCase() + ' DRANK TODAY';
     if (isMl) {
       $('waterNum').textContent = drankMl;
-      $('waterTarget').textContent = '/ ' + targetMl + ' ml';
     } else {
       $('waterNum').textContent = count;
-      $('waterTarget').textContent = '/ ' + targetUnits;
     }
+    // Target is always shown in ml, regardless of unit mode — the number
+    // that actually matters day to day, not an arbitrary "/ 3" bottle count.
+    $('waterTarget').textContent = '/ ' + targetMl + ' ml';
     $('waterPlusLabel').textContent = isMl ? ('Drank ' + (state.mlIncrement || 100) + ' ml') : 'Drank a ' + unitLabelSingular();
 
     // Progress bar with three zones: low (0-65%), healthy (65-100%), over (100-150%)

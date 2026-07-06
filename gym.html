@@ -913,6 +913,56 @@ img, video, canvas, svg { max-width: 100%; }
   margin-bottom: 14px;
   display: inline-flex; align-items: center; gap: 6px;
 }
+
+/* ----- Gym calendar ----- */
+.po-cal-streak {
+  color: var(--good); font-size: 13px; font-weight: 500;
+  margin-bottom: 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.po-cal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 4px 0 12px;
+}
+.po-cal-title {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--text-2);
+  font-family: var(--font-mono);
+}
+.po-cal-nav {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  width: 28px; height: 28px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.po-cal-nav:hover { color: var(--text-1); background: rgba(255,255,255,0.09); }
+.po-cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.po-cal-dow {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 6px; margin-bottom: 6px;
+}
+.po-cal-dow span {
+  text-align: center; font-size: 10px; color: var(--text-3);
+  font-weight: 700; letter-spacing: 0.06em;
+}
+.po-cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+}
+.po-cal-cell {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,0.025); color: var(--text-3);
+  position: relative;
+}
+.po-cal-cell.empty { background: transparent; }
+.po-cal-cell.done {
+  background: rgba(107,227,164,0.16); color: #DFFBEC; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(107,227,164,0.35) inset;
+}
+.po-cal-cell.today { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.5) inset; }
+.po-cal-cell.done.today { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.6) inset, 0 0 0 3px rgba(107,227,164,0.30) inset; }
 .wt-empty {
   text-align: center; padding: 28px 16px;
   color: var(--text-3); font-size: 13px;
@@ -1606,6 +1656,22 @@ img, video, canvas, svg { max-width: 100%; }
       </button>
       <div class="po-tw-past-body" id="poTwPastBody" style="display:none"></div>
     </div>
+
+    <!-- Gym calendar — marks each day "Mark workout done" was toggled on,
+         same source of truth (WORKOUT_DONE_KEY) as the done badge above. -->
+    <div class="po-sub-section">
+      <div class="po-sub-title">Calendar</div>
+      <div class="po-cal-streak" id="poCalStreak" style="display:none">🔥<span id="poCalStreakNum">0 day streak</span></div>
+      <div class="po-cal-head">
+        <button class="po-cal-nav" id="poCalPrev" type="button" aria-label="Previous month">&larr;</button>
+        <span class="po-cal-title" id="poCalTitle">&mdash;</span>
+        <button class="po-cal-nav" id="poCalNext" type="button" aria-label="Next month">&rarr;</button>
+      </div>
+      <div class="po-cal-dow">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="po-cal-grid" id="poCalGrid"></div>
+    </div>
   </div>
 </div>
 
@@ -2118,6 +2184,7 @@ img, video, canvas, svg { max-width: 100%; }
     renderRx(); renderStats(); renderSparkline(); renderHistory();
     renderTodaysWorkout();
     renderPastWorkouts();
+    renderGymCalendar();
     // Pre-fill weight input with last logged weight (or starting weight)
     const ex = getCurrentEx();
     if (ex && !ex.bw) {
@@ -2273,6 +2340,7 @@ img, video, canvas, svg { max-width: 100%; }
     saveDoneDays(doneDays);
     renderTodaysWorkout();
     renderPastWorkouts();
+    renderGymCalendar();
   });
   $('poTwPastToggle').addEventListener('click', () => {
     const body = $('poTwPastBody');
@@ -2281,6 +2349,78 @@ img, video, canvas, svg { max-width: 100%; }
     body.style.display = open ? 'none' : 'flex';
     body.style.flexDirection = 'column';
     toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+  });
+
+  // ============================================================
+  // GYM CALENDAR — month grid + streak over doneDays (same data the
+  // "Mark workout done" button toggles above).
+  // ============================================================
+  const GYM_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const gymCalState = (() => {
+    const n = new Date();
+    return { year: n.getFullYear(), month: n.getMonth() }; // month is 0-11
+  })();
+
+  function gymCalStreak() {
+    let streak = 0;
+    const cursor = new Date();
+    if (!doneDays[wtDateKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
+    while (doneDays[wtDateKey(cursor)]) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  function renderGymCalendar() {
+    const streakEl = $('poCalStreak');
+    const streak = gymCalStreak();
+    if (streak >= 2) {
+      streakEl.style.display = '';
+      $('poCalStreakNum').textContent = streak + ' day streak';
+    } else {
+      streakEl.style.display = 'none';
+    }
+
+    $('poCalTitle').textContent = GYM_MONTH_NAMES[gymCalState.month] + ' ' + gymCalState.year;
+
+    const firstOfMonth = new Date(gymCalState.year, gymCalState.month, 1);
+    const startDow = firstOfMonth.getDay(); // 0 = Sun
+    const daysInMonth = new Date(gymCalState.year, gymCalState.month + 1, 0).getDate();
+    const tKey = wtDateKey(new Date());
+
+    let html = '';
+    for (let i = 0; i < startDow; i++) {
+      html += '<div class="po-cal-cell empty"></div>';
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(gymCalState.year, gymCalState.month, d);
+      const k = wtDateKey(dt);
+      const done = !!doneDays[k];
+      const isToday = k === tKey;
+      const cls = ['po-cal-cell'];
+      if (done) cls.push('done');
+      if (isToday) cls.push('today');
+      html += '<div class="' + cls.join(' ') + '">' + d + '</div>';
+    }
+    $('poCalGrid').innerHTML = html;
+
+    // Don't let "next month" go into the future.
+    const now = new Date();
+    const isCurrentMonth = gymCalState.year === now.getFullYear() && gymCalState.month === now.getMonth();
+    $('poCalNext').disabled = isCurrentMonth;
+  }
+
+  $('poCalPrev').addEventListener('click', () => {
+    gymCalState.month--;
+    if (gymCalState.month < 0) { gymCalState.month = 11; gymCalState.year--; }
+    renderGymCalendar();
+  });
+  $('poCalNext').addEventListener('click', () => {
+    if ($('poCalNext').disabled) return;
+    gymCalState.month++;
+    if (gymCalState.month > 11) { gymCalState.month = 0; gymCalState.year++; }
+    renderGymCalendar();
   });
 
   // ============================================================
