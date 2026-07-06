@@ -193,8 +193,9 @@ def garmin_data():
         # enough for a once-a-day dashboard card.
         "pulseOx": non_negative(dto.avg_spo2 if dto else None),
         "respirationRate": non_negative(dto.avg_respiration_value if dto else None),
-        # Not exposed by this package at all — frontend just shows a dash.
-        "skinTempDeviationC": None,
+        "steps": non_negative(stats.total_steps if stats else None) or 0,
+        "stepGoal": non_negative(stats.daily_step_goal if stats else None) or 0,
+        "caloriesBurned": non_negative(stats.total_kilocalories if stats else None) or 0,
         "updatedAt": datetime.datetime.now().isoformat(),
     }
     return jsonify(payload)

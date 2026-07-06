@@ -261,11 +261,11 @@ body::after {
 @media (max-width: 480px) { .grm-stats { grid-template-columns: repeat(2, 1fr); } .grm-stat-value { font-size: 20px; } }
 
 /* ===== Biomarker strip ===== */
-.grm-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.grm-bio { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
 .grm-bio-item { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; text-align: center; }
 .grm-bio-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
 .grm-bio-val { font-size: 14px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-@media (max-width: 380px) { .grm-bio { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .grm-bio { grid-template-columns: repeat(2, 1fr); } }
 
 /* ===== Zone dot system ===== */
 .grm-stat, .grm-bio-item { position: relative; }
@@ -506,12 +506,16 @@ body::after {
           </div>
         </div>
 
-        <!-- Biomarker strip -->
+        <!-- Biomarker + activity strip -->
         <div class="grm-bio">
           <div class="grm-bio-item">
-            <span class="grm-zone" id="grmZoneSkin"></span>
-            <span class="grm-bio-label">Skin temp</span>
-            <span class="grm-bio-val" id="grmSkinTemp">&mdash;</span>
+            <span class="grm-zone" id="grmZoneSteps"></span>
+            <span class="grm-bio-label">Steps</span>
+            <span class="grm-bio-val" id="grmSteps">&mdash;</span>
+          </div>
+          <div class="grm-bio-item">
+            <span class="grm-bio-label">Calories</span>
+            <span class="grm-bio-val" id="grmCalories">&mdash;</span>
           </div>
           <div class="grm-bio-item">
             <span class="grm-zone" id="grmZoneSpo2"></span>
@@ -558,16 +562,15 @@ body::after {
 <div id="setupOverlay">
   <div class="setup-card">
     <h2>Connect your Garmin</h2>
-    <div class="sub">This page talks to a small local backend (the <code>garmin-proxy</code> folder next to this file) that logs into your Garmin account with your email/password using an unofficial library and serves your daily stats as JSON. Your password stays in a local <code>.env</code> file on your machine — it never touches this page's JavaScript.</div>
+    <div class="sub">This page talks to a small backend (the <code>garmin-proxy</code> folder) that logs into your Garmin account with your email/password using an unofficial library and serves your daily stats as JSON. By default this points at the hosted copy on Render, which works from any device. Your credentials only ever live in that backend's environment — never in this page's JavaScript.</div>
 
     <ol>
-      <li>In <code>garmin-proxy/</code>, copy <code>.env.example</code> to <code>.env</code> and fill in your Garmin email + password</li>
-      <li>Run <code>pip install -r requirements.txt</code> once, then <code>python server.py</code> to start it</li>
-      <li>Paste the server's local URL below (default <code>http://localhost:8734</code>)</li>
+      <li>Hosted (default): already set below, pointing at the Render deployment — works on your phone too</li>
+      <li>Local instead: in <code>garmin-proxy/</code>, copy <code>.env.example</code> to <code>.env</code>, fill in your Garmin email + password, run <code>pip install -r requirements.txt</code> once then <code>python server.py</code>, and paste its local URL below (e.g. <code>http://localhost:8734</code>)</li>
     </ol>
 
     <label>Backend proxy base URL</label>
-    <input id="cfgProxyUrl" type="text" placeholder="http://localhost:8734">
+    <input id="cfgProxyUrl" type="text" placeholder="https://dashboard-a8fp.onrender.com">
 
     <div class="actions">
       <button class="secondary" id="cfgSkipBtn" type="button">Skip for now</button>
@@ -616,9 +619,15 @@ body::after {
   // OAuth1.0a consumer key/secret must stay server-side; Garmin's
   // handshake can't be done from client JS the way WHOOP's OAuth2
   // authorize redirect can.
+  //
+  // DEFAULT_PROXY_URL points at the hosted garmin-proxy (Render) so this
+  // works out of the box on any device/browser — phone included — without
+  // needing to open Settings first. Override via the gear icon (e.g. back
+  // to http://localhost:8734) if you want to hit a local instance instead.
   // ============================================================
+  const DEFAULT_PROXY_URL = 'https://dashboard-a8fp.onrender.com';
   const cfg = {
-    proxyUrl: (localStorage.getItem('garmin_cfg_proxyUrl') || '').replace(/\/$/, '')
+    proxyUrl: (localStorage.getItem('garmin_cfg_proxyUrl') || DEFAULT_PROXY_URL).replace(/\/$/, '')
   };
 
   // ---- Setup overlay wiring ----
@@ -697,7 +706,12 @@ body::after {
   function zoneRhr(v)         { if (v == null) return 'norm'; return v <= 60 ? 'good' : v <= 70 ? 'norm' : v <= 80 ? 'warn' : 'bad'; }
   function zoneSpo2(v)        { if (v == null) return 'norm'; return v >= 95 ? 'good' : v >= 90 ? 'warn' : 'bad'; }
   function zoneResp(v)        { if (v == null) return 'norm'; return (v >= 12 && v <= 20) ? 'good' : ((v >= 8 && v < 12) || (v > 20 && v <= 24)) ? 'warn' : 'bad'; }
-  function zoneSkinTemp(dev)  { if (dev == null) return 'norm'; const a = Math.abs(dev); return a <= 0.3 ? 'good' : a <= 0.8 ? 'warn' : 'bad'; }
+  // Progress toward Garmin's own daily step goal, not a fixed health cutoff.
+  function zoneSteps(steps, goal) {
+    if (steps == null || !goal) return 'norm';
+    const pct = steps / goal;
+    return pct >= 1 ? 'good' : pct >= 0.5 ? 'norm' : pct >= 0.25 ? 'warn' : 'bad';
+  }
 
   function setZone(id, zone) {
     const el = $(id);
@@ -765,7 +779,8 @@ body::after {
   //   rhr: number (bpm),
   //   pulseOx: number (percent),
   //   respirationRate: number (breaths/min),
-  //   skinTempDeviationC: number,
+  //   steps: number, stepGoal: number,
+  //   caloriesBurned: number,
   //   updatedAt: ISO date string
   // }
   // ============================================================
@@ -810,14 +825,16 @@ body::after {
     $('grmRhr').textContent = d.rhr != null ? Math.round(d.rhr) : '—';
     setZone('grmZoneRhr', zoneRhr(d.rhr));
 
-    $('grmSkinTemp').textContent = d.skinTempDeviationC != null ? (d.skinTempDeviationC > 0 ? '+' : '') + d.skinTempDeviationC.toFixed(1) + '°' : '—';
-    setZone('grmZoneSkin', zoneSkinTemp(d.skinTempDeviationC));
-
     $('grmSpo2').textContent = d.pulseOx != null ? Math.round(d.pulseOx) + '%' : '—';
     setZone('grmZoneSpo2', zoneSpo2(d.pulseOx));
 
     $('grmResp').textContent = d.respirationRate != null ? d.respirationRate.toFixed(1) : '—';
     setZone('grmZoneResp', zoneResp(d.respirationRate));
+
+    $('grmSteps').textContent = d.steps != null ? Math.round(d.steps).toLocaleString() : '—';
+    setZone('grmZoneSteps', zoneSteps(d.steps, d.stepGoal));
+
+    $('grmCalories').textContent = d.caloriesBurned != null ? Math.round(d.caloriesBurned).toLocaleString() : '—';
 
     $('grmUpdated').textContent = d.updatedAt ? 'updated ' + new Date(d.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
