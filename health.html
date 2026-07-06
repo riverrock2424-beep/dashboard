@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="lock.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<title>Health · Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+
+<style>
+:root {
+  --text-primary: #FAFAFA;
+  --text-secondary: #B8B6B0;
+  --text-tertiary: #76746E;
+  --success: #6BE3A4;
+  --warning: #F2C063;
+  --danger:  #FF6B6B;
+  --accent: #3DC2EC;
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #050506;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: max(28px, env(safe-area-inset-top)) 20px calc(100px + env(safe-area-inset-bottom));
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(224, 118, 88, 0.16), transparent 45%),
+    radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.06), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: -2;
+  animation: drift 36s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0,0,0); }
+  100% { transform: translate3d(-22px, 14px, 0); }
+}
+
+.page { max-width: 720px; margin: 0 auto; }
+
+.page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 6px;
+}
+.dash-title {
+  margin: 0 0 14px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+@media (max-width: 480px) { .dash-title { font-size: 22px; } }
+
+.icon-btn {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-secondary); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  margin-bottom: 14px;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.09); color: var(--text-primary); }
+
+.section { margin-top: 8px; margin-bottom: 18px; }
+.section-title {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title::before {
+  content: ''; width: 18px; height: 1px;
+  background: var(--text-tertiary); opacity: 0.6;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
+}
+
+.gm-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 22px 22px 18px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+/* ===== Brand wordmark ===== */
+.grm-brand { display: inline-flex; align-items: center; gap: 8px; }
+.grm-brand-mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #04222E;
+  font-weight: 900; font-size: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 12px rgba(61, 194, 236, 0.45);
+}
+.grm-brand-text {
+  font-weight: 800; font-size: 13px; letter-spacing: 0.18em;
+  color: var(--text-primary);
+}
+
+/* ===== Disconnected state ===== */
+.grm-disconnected {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; padding: 18px 8px 8px; gap: 6px;
+}
+.grm-disconnected .grm-brand { margin-bottom: 14px; }
+.grm-disconnected-title {
+  font-size: 22px; font-weight: 700; color: var(--text-primary);
+  letter-spacing: -0.02em; margin-top: 2px;
+}
+.grm-disconnected-sub {
+  font-size: 13px; color: var(--text-tertiary);
+  max-width: 320px; line-height: 1.5; margin-bottom: 18px;
+}
+.grm-connect-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.85);
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
+  color: #0A0A0B; font-family: inherit; font-size: 13.5px; font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.18s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 6px 20px rgba(0,0,0,0.45);
+}
+.grm-connect-btn:hover { transform: translateY(-1px); }
+.grm-connect-btn:active { transform: translateY(0) scale(0.98); }
+.grm-auth-status {
+  font-size: 11px; color: var(--text-tertiary); margin-top: 12px;
+  min-height: 14px; font-style: italic;
+}
+.grm-auth-status.err { color: var(--danger); font-style: normal; }
+
+/* ===== Connected state ===== */
+.grm-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.grm-live-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--success); margin-left: 4px;
+}
+.grm-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+  box-shadow: 0 0 8px rgba(107,227,164,0.65);
+  animation: grm-pulse 1.6s ease-in-out infinite;
+}
+@keyframes grm-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.85); }
+}
+.grm-header-right { display: flex; align-items: center; gap: 10px; }
+.grm-updated {
+  font-size: 11px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums; font-family: var(--font-mono);
+}
+.grm-refresh-btn {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04); color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.18s, color 0.18s, transform 0.6s ease;
+  flex-shrink: 0;
+}
+.grm-refresh-btn:hover { background: rgba(255,255,255,0.10); color: var(--text-primary); }
+.grm-refresh-btn.spin svg { animation: grm-spin 0.6s linear; }
+@keyframes grm-spin { to { transform: rotate(360deg); } }
+
+/* ===== Hero body-battery ring ===== */
+.grm-ring-wrap {
+  position: relative; width: 220px; max-width: 78%;
+  margin: 0 auto 24px; aspect-ratio: 1;
+}
+.grm-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.grm-ring-track { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 12; }
+.grm-ring-fill {
+  fill: none; stroke: var(--accent); stroke-width: 12; stroke-linecap: round;
+  stroke-dasharray: 553.1; stroke-dashoffset: 553.1;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.22,1,0.36,1), stroke 0.4s;
+}
+.grm-ring-center {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; pointer-events: none;
+}
+.grm-ring-num {
+  font-size: 54px; font-weight: 700; letter-spacing: -0.04em;
+  color: var(--text-primary); line-height: 1; font-variant-numeric: tabular-nums;
+}
+.grm-ring-unit {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.20em;
+  text-transform: uppercase; color: var(--text-tertiary); margin-top: 10px;
+}
+.grm-ring-label { font-size: 12.5px; font-weight: 600; margin-top: 6px; }
+
+/* ===== Sleep stages ===== */
+.grm-stages { margin-bottom: 22px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.06); }
+.grm-stages-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.grm-stages-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-tertiary); }
+.grm-stages-meta { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.grm-stages-bar {
+  display: flex; height: 10px; background: rgba(255,255,255,0.04);
+  border-radius: 999px; overflow: hidden; margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.grm-stage { height: 100%; transition: width 0.7s cubic-bezier(0.22,1,0.36,1); }
+.grm-stage-rem   { background: #FFFFFF; }
+.grm-stage-deep  { background: var(--accent); }
+.grm-stage-light { background: #76746E; }
+.grm-stage-awake { background: #38362F; }
+.grm-stages-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.grm-stages-leg { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+.grm-stages-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.grm-stages-dot.d-rem   { background: #FFFFFF; }
+.grm-stages-dot.d-deep  { background: var(--accent); }
+.grm-stages-dot.d-light { background: #76746E; }
+.grm-stages-dot.d-awake { background: #38362F; border: 1px solid rgba(255,255,255,0.1); }
+.grm-stages-num { margin-left: auto; color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 11px; }
+@media (max-width: 480px) { .grm-stages-legend { grid-template-columns: repeat(2, 1fr); } }
+
+/* ===== Stats grid ===== */
+.grm-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.06); }
+.grm-stat { position: relative; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 10px; text-align: center; }
+.grm-stat-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 8px; }
+.grm-stat-value { font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.grm-stat-sub { font-size: 10px; color: var(--text-tertiary); margin-top: 5px; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+@media (max-width: 480px) { .grm-stats { grid-template-columns: repeat(2, 1fr); } .grm-stat-value { font-size: 20px; } }
+
+/* ===== Biomarker strip ===== */
+.grm-bio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.grm-bio-item { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; text-align: center; }
+.grm-bio-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
+.grm-bio-val { font-size: 14px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+@media (max-width: 380px) { .grm-bio { grid-template-columns: 1fr; } }
+
+/* ===== Zone dot system ===== */
+.grm-stat, .grm-bio-item { position: relative; }
+.grm-zone {
+  position: absolute; top: 9px; right: 9px; width: 7px; height: 7px;
+  border-radius: 50%; background: rgba(255,255,255,0.12);
+}
+.grm-zone.z-good { background: var(--success); box-shadow: 0 0 7px rgba(107,227,164,0.55); }
+.grm-zone.z-norm { background: rgba(255,255,255,0.30); }
+.grm-zone.z-warn { background: var(--warning); box-shadow: 0 0 7px rgba(242,192,99,0.55); }
+.grm-zone.z-bad  { background: var(--danger); box-shadow: 0 0 7px rgba(255,107,107,0.55); }
+
+.grm-legend {
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 14px;
+  margin-top: 14px; padding: 10px 12px; background: rgba(255,255,255,0.02);
+  border-radius: 999px; border: 1px solid rgba(255,255,255,0.06);
+}
+.grm-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.04em; }
+.grm-legend-item .grm-zone { position: static; display: inline-block; }
+
+/* ===== Verdict ===== */
+.grm-verdict {
+  margin-top: 18px; padding: 16px 18px;
+  background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06);
+  border-left: 2px solid var(--accent); border-radius: 0 12px 12px 0;
+}
+.grm-verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.grm-verdict-eyebrow { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.18em; font-weight: 700; }
+.grm-verdict-badge { font-size: 9.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.14em; text-transform: uppercase; border: 1px solid; }
+.grm-verdict-headline { font-size: 15px; font-weight: 600; color: var(--text-primary); line-height: 1.4; margin-bottom: 12px; letter-spacing: -0.01em; }
+.grm-verdict-reasons { font-size: 12.5px; color: var(--text-secondary); line-height: 1.65; }
+.grm-verdict-avoid { font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); }
+.grm-verdict-avoid-label { color: var(--danger); font-weight: 700; }
+
+.grm-disconnect-btn {
+  display: block; margin: 16px auto 0; padding: 7px 14px;
+  background: transparent; border: 1px solid transparent;
+  color: var(--text-tertiary); font-size: 11px; font-family: inherit; font-weight: 500;
+  letter-spacing: 0.04em; border-radius: 999px; cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.grm-disconnect-btn:hover { color: var(--text-secondary); border-color: rgba(255,255,255,0.08); }
+
+/* ===== Setup overlay ===== */
+#setupOverlay {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(5,5,6,0.92);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  display: none; align-items: center; justify-content: center; padding: 24px;
+}
+#setupOverlay.is-visible { display: flex; }
+#setupOverlay .setup-card {
+  max-width: 520px; width: 100%;
+  background: rgba(20,20,22,0.95);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px; padding: 26px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+}
+#setupOverlay h2 { font-size: 20px; font-weight: 700; margin: 0 0 6px; color: var(--text-primary); letter-spacing: -0.01em; }
+#setupOverlay .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+#setupOverlay ol { padding-left: 18px; margin: 12px 0 18px; }
+#setupOverlay li { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; line-height: 1.5; }
+#setupOverlay li code { background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); }
+#setupOverlay label { display: block; font-size: 11px; letter-spacing: 0.14em; color: var(--text-tertiary); text-transform: uppercase; margin: 14px 0 6px; font-weight: 600; }
+#setupOverlay input {
+  width: 100%; box-sizing: border-box; padding: 11px 13px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; color: var(--text-primary); font: inherit; font-size: 13px;
+  font-family: var(--font-mono); outline: none;
+}
+#setupOverlay input:focus { border-color: var(--accent); }
+#setupOverlay .actions { display: flex; gap: 10px; margin-top: 20px; }
+#setupOverlay button {
+  flex: 1; padding: 12px 18px; border-radius: 10px;
+  background: rgba(61,194,236,0.16); border: 1px solid rgba(61,194,236,0.40);
+  color: var(--accent); font: inherit; font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: background 0.2s; letter-spacing: 0.02em;
+}
+#setupOverlay button:hover { background: rgba(61,194,236,0.28); }
+#setupOverlay button.secondary { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: var(--text-secondary); }
+
+@media (max-width: 480px) {
+  body { padding: max(20px, env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom)); }
+  .gm-card { padding: 16px; }
+}
+
+/* ---------------- Shared bottom nav tab bar ---------------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; justify-content: center;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.78) 38%, rgba(10,10,11,0.94) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+.tabbar-inner {
+  pointer-events: auto;
+  display: flex; width: 100%; max-width: 520px;
+  gap: 6px; padding: 6px;
+  background: rgba(20, 20, 22, 0.72);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  overflow-x: auto;
+}
+.tab {
+  flex: 1 1 0; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 12px 14px; border-radius: 13px;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  text-decoration: none; background: transparent;
+  border: 1px solid transparent;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab:hover { color: var(--text-primary); }
+.tab[aria-current="page"] {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+}
+.tab-icon {
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tab-icon svg { width: 100%; height: 100%; display: block; }
+@media (max-width: 480px) {
+  .tab { padding: 11px 10px; font-size: 13px; }
+  .tabbar { padding-left: 12px; padding-right: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="page-head">
+    <h1 class="dash-title">Health</h1>
+  </div>
+  <button class="icon-btn" id="openCfgBtn" type="button" aria-label="Garmin settings" title="Garmin settings">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+
+  <div class="section">
+    <div class="section-title">Garmin</div>
+    <div class="gm-card garmin-card">
+
+      <!-- ===== DISCONNECTED ===== -->
+      <div id="grmDisconnected" class="grm-disconnected">
+        <div class="grm-brand">
+          <span class="grm-brand-mark">G</span>
+          <span class="grm-brand-text">GARMIN</span>
+        </div>
+        <div class="grm-disconnected-title">Not connected</div>
+        <div class="grm-disconnected-sub">Link your Garmin account to see Body Battery, sleep, and stress. Garmin's API needs a backend you control &mdash; there's no direct-from-browser option like some other wearables.</div>
+        <button id="grmConnectBtn" class="grm-connect-btn" type="button">
+          Connect Garmin
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 5 20 12 13 19"/></svg>
+        </button>
+        <div id="grmAuthStatus" class="grm-auth-status"></div>
+      </div>
+
+      <!-- ===== CONNECTED ===== -->
+      <div id="grmConnected" class="grm-connected" style="display:none">
+        <div class="grm-header">
+          <div class="grm-brand">
+            <span class="grm-brand-mark">G</span>
+            <span class="grm-brand-text">GARMIN</span>
+            <span class="grm-live-tag"><span class="grm-live-dot"></span>live</span>
+          </div>
+          <div class="grm-header-right">
+            <span id="grmUpdated" class="grm-updated">loading&hellip;</span>
+            <button id="grmRefreshBtn" class="grm-refresh-btn" title="Refresh" aria-label="Refresh">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15A9 9 0 1 1 5.64 5.64L23 10"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hero body-battery ring -->
+        <div class="grm-ring-wrap">
+          <svg class="grm-ring" viewBox="0 0 220 220" aria-hidden="true">
+            <circle class="grm-ring-track" cx="110" cy="110" r="88" />
+            <circle class="grm-ring-fill" cx="110" cy="110" r="88" id="grmBatteryRingFill" />
+          </svg>
+          <div class="grm-ring-center">
+            <div id="grmBatteryScore" class="grm-ring-num">&mdash;</div>
+            <div class="grm-ring-unit">body battery</div>
+            <div id="grmBatteryLabel" class="grm-ring-label">&mdash;</div>
+          </div>
+        </div>
+
+        <!-- Sleep stages -->
+        <div id="grmStages" class="grm-stages" style="display:none">
+          <div class="grm-stages-head">
+            <span class="grm-stages-eyebrow">Sleep stages</span>
+            <span class="grm-stages-meta" id="grmStagesMeta"></span>
+          </div>
+          <div class="grm-stages-bar">
+            <div class="grm-stage grm-stage-rem"   id="grmStageRem"   style="width:0%"></div>
+            <div class="grm-stage grm-stage-deep"  id="grmStageDeep"  style="width:0%"></div>
+            <div class="grm-stage grm-stage-light" id="grmStageLight" style="width:0%"></div>
+            <div class="grm-stage grm-stage-awake" id="grmStageAwake" style="width:0%"></div>
+          </div>
+          <div class="grm-stages-legend">
+            <div class="grm-stages-leg"><span class="grm-stages-dot d-rem"></span>REM <span id="grmStageRemTxt" class="grm-stages-num">&mdash;</span></div>
+            <div class="grm-stages-leg"><span class="grm-stages-dot d-deep"></span>Deep <span id="grmStageDeepTxt" class="grm-stages-num">&mdash;</span></div>
+            <div class="grm-stages-leg"><span class="grm-stages-dot d-light"></span>Light <span id="grmStageLightTxt" class="grm-stages-num">&mdash;</span></div>
+            <div class="grm-stages-leg"><span class="grm-stages-dot d-awake"></span>Awake <span id="grmStageAwakeTxt" class="grm-stages-num">&mdash;</span></div>
+          </div>
+        </div>
+
+        <!-- Stats grid -->
+        <div class="grm-stats">
+          <div class="grm-stat">
+            <span class="grm-zone" id="grmZoneSleep"></span>
+            <div class="grm-stat-label">Sleep</div>
+            <div class="grm-stat-value" id="grmSleepScore">&mdash;</div>
+            <div class="grm-stat-sub" id="grmSleepDuration">&mdash;</div>
+          </div>
+          <div class="grm-stat">
+            <span class="grm-zone" id="grmZoneStress"></span>
+            <div class="grm-stat-label">Stress</div>
+            <div class="grm-stat-value" id="grmStress">&mdash;</div>
+            <div class="grm-stat-sub">today avg</div>
+          </div>
+          <div class="grm-stat">
+            <span class="grm-zone" id="grmZoneHrv"></span>
+            <div class="grm-stat-label">HRV</div>
+            <div class="grm-stat-value" id="grmHrv">&mdash;</div>
+            <div class="grm-stat-sub">ms</div>
+          </div>
+          <div class="grm-stat">
+            <span class="grm-zone" id="grmZoneRhr"></span>
+            <div class="grm-stat-label">RHR</div>
+            <div class="grm-stat-value" id="grmRhr">&mdash;</div>
+            <div class="grm-stat-sub">bpm</div>
+          </div>
+        </div>
+
+        <!-- Biomarker strip -->
+        <div class="grm-bio">
+          <div class="grm-bio-item">
+            <span class="grm-zone" id="grmZoneSkin"></span>
+            <span class="grm-bio-label">Skin temp</span>
+            <span class="grm-bio-val" id="grmSkinTemp">&mdash;</span>
+          </div>
+          <div class="grm-bio-item">
+            <span class="grm-zone" id="grmZoneSpo2"></span>
+            <span class="grm-bio-label">Pulse Ox</span>
+            <span class="grm-bio-val" id="grmSpo2">&mdash;</span>
+          </div>
+          <div class="grm-bio-item">
+            <span class="grm-zone" id="grmZoneResp"></span>
+            <span class="grm-bio-label">Resp rate</span>
+            <span class="grm-bio-val" id="grmResp">&mdash;</span>
+          </div>
+        </div>
+
+        <!-- Zone legend -->
+        <div class="grm-legend">
+          <span class="grm-legend-item"><span class="grm-zone z-good"></span>Good</span>
+          <span class="grm-legend-item"><span class="grm-zone z-norm"></span>Normal</span>
+          <span class="grm-legend-item"><span class="grm-zone z-warn"></span>Watch</span>
+          <span class="grm-legend-item"><span class="grm-zone z-bad"></span>High / Low</span>
+        </div>
+
+        <!-- Today's call -->
+        <div id="grmVerdict" class="grm-verdict" style="display:none">
+          <div class="grm-verdict-head">
+            <span class="grm-verdict-eyebrow">Today's call</span>
+            <span id="grmVerdictBadge" class="grm-verdict-badge"></span>
+          </div>
+          <div id="grmVerdictHeadline" class="grm-verdict-headline"></div>
+          <div id="grmVerdictReasons" class="grm-verdict-reasons"></div>
+          <div id="grmVerdictAvoid" class="grm-verdict-avoid" style="display:none">
+            <span class="grm-verdict-avoid-label">Avoid today:</span> <span id="grmVerdictAvoidText"></span>
+          </div>
+        </div>
+
+        <button id="grmDisconnectBtn" class="grm-disconnect-btn" type="button">Disconnect</button>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<!-- Setup overlay — shown until a backend proxy URL is saved -->
+<div id="setupOverlay">
+  <div class="setup-card">
+    <h2>Connect your Garmin</h2>
+    <div class="sub">This page talks to a small local backend (the <code>garmin-proxy</code> folder next to this file) that logs into your Garmin account with your email/password using an unofficial library and serves your daily stats as JSON. Your password stays in a local <code>.env</code> file on your machine — it never touches this page's JavaScript.</div>
+
+    <ol>
+      <li>In <code>garmin-proxy/</code>, copy <code>.env.example</code> to <code>.env</code> and fill in your Garmin email + password</li>
+      <li>Run <code>pip install -r requirements.txt</code> once, then <code>python server.py</code> to start it</li>
+      <li>Paste the server's local URL below (default <code>http://localhost:8734</code>)</li>
+    </ol>
+
+    <label>Backend proxy base URL</label>
+    <input id="cfgProxyUrl" type="text" placeholder="http://localhost:8734">
+
+    <div class="actions">
+      <button class="secondary" id="cfgSkipBtn" type="button">Skip for now</button>
+      <button id="cfgSaveBtn" type="button">Save &amp; continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="tabbar">
+  <div class="tabbar-inner">
+    <a href="index.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+      Home
+    </a>
+    <a href="gym.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 17.5 17.5"/><path d="M21 21l-1.5-1.5"/><path d="M4 4 5.5 5.5"/><path d="M15.5 5.5 18.5 8.5"/><path d="M5.5 15.5 8.5 18.5"/><path d="M9.5 9.5 14.5 14.5"/></svg></span>
+      Gym
+    </a>
+    <a href="water.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.32 0z"/></svg></span>
+      Water
+    </a>
+    <a href="meditation.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/><path d="M5 21h14"/></svg></span>
+      Meditate
+    </a>
+    <a href="health.html" class="tab" aria-current="page">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
+      Health
+    </a>
+    <a href="finance.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span>
+      Finance
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  // ============================================================
+  // CONFIG — only a backend base URL lives in the browser. The
+  // OAuth1.0a consumer key/secret must stay server-side; Garmin's
+  // handshake can't be done from client JS the way WHOOP's OAuth2
+  // authorize redirect can.
+  // ============================================================
+  const cfg = {
+    proxyUrl: (localStorage.getItem('garmin_cfg_proxyUrl') || '').replace(/\/$/, '')
+  };
+
+  // ---- Setup overlay wiring ----
+  const overlay = $('setupOverlay');
+  const openCfgBtn = $('openCfgBtn');
+  const skipBtn = $('cfgSkipBtn');
+  const saveBtn = $('cfgSaveBtn');
+  const proxyInput = $('cfgProxyUrl');
+
+  function showOverlay() { proxyInput.value = cfg.proxyUrl; overlay.classList.add('is-visible'); }
+  function hideOverlay() { overlay.classList.remove('is-visible'); }
+
+  openCfgBtn.addEventListener('click', showOverlay);
+  skipBtn.addEventListener('click', hideOverlay);
+  saveBtn.addEventListener('click', () => {
+    cfg.proxyUrl = proxyInput.value.trim().replace(/\/$/, '');
+    localStorage.setItem('garmin_cfg_proxyUrl', cfg.proxyUrl);
+    hideOverlay();
+    boot();
+  });
+
+  // ============================================================
+  // CONNECT / DISCONNECT
+  // ============================================================
+  const disconnectedEl = $('grmDisconnected');
+  const connectedEl = $('grmConnected');
+  const authStatusEl = $('grmAuthStatus');
+
+  function showDisconnected(message, isError) {
+    disconnectedEl.style.display = '';
+    connectedEl.style.display = 'none';
+    authStatusEl.textContent = message || '';
+    authStatusEl.classList.toggle('err', !!message && isError !== false);
+  }
+  function showConnected() {
+    disconnectedEl.style.display = 'none';
+    connectedEl.style.display = '';
+  }
+
+  $('grmConnectBtn').addEventListener('click', async () => {
+    if (!cfg.proxyUrl) { showOverlay(); return; }
+    // No OAuth redirect needed — the backend already holds your Garmin
+    // credentials in its own .env file. "Connecting" here just means
+    // confirming the local server is up and able to log in.
+    showDisconnected('Connecting…', false);
+    try {
+      const res = await fetch(cfg.proxyUrl + '/health');
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || ('status ' + res.status));
+      localStorage.setItem('garmin_connected', 'yes');
+      refreshData(false);
+    } catch (e) {
+      showDisconnected('Could not log in — ' + e.message);
+    }
+  });
+
+  $('grmDisconnectBtn').addEventListener('click', () => {
+    localStorage.removeItem('garmin_connected');
+    showDisconnected();
+    // Note: this only forgets the local "connected" flag on this device.
+    // The backend keeps your saved credentials/session until you remove
+    // its .env file or cached session yourself.
+  });
+
+  // ============================================================
+  // ZONE CLASSIFICATION — simple, tunable thresholds. Each returns
+  // 'good' | 'norm' | 'warn' | 'bad'.
+  // ============================================================
+  // `v == null` catches both null and undefined — missing data should read
+  // as a neutral gray dot, not a false "good"/"bad" from null coercing to 0
+  // in the comparisons below.
+  function zoneBodyBattery(v) { if (v == null) return 'norm'; return v >= 70 ? 'good' : v >= 40 ? 'norm' : v >= 20 ? 'warn' : 'bad'; }
+  function zoneSleep(v)       { if (v == null) return 'norm'; return v >= 85 ? 'good' : v >= 70 ? 'norm' : v >= 50 ? 'warn' : 'bad'; }
+  function zoneStress(v)      { if (v == null) return 'norm'; return v <= 25 ? 'good' : v <= 50 ? 'norm' : v <= 75 ? 'warn' : 'bad'; }
+  function zoneHrvStatus(s)   { return s === 'balanced' ? 'good' : s === 'unbalanced' ? 'warn' : s === 'low' ? 'bad' : 'norm'; }
+  function zoneRhr(v)         { if (v == null) return 'norm'; return v <= 60 ? 'good' : v <= 70 ? 'norm' : v <= 80 ? 'warn' : 'bad'; }
+  function zoneSpo2(v)        { if (v == null) return 'norm'; return v >= 95 ? 'good' : v >= 90 ? 'warn' : 'bad'; }
+  function zoneResp(v)        { if (v == null) return 'norm'; return (v >= 12 && v <= 20) ? 'good' : ((v >= 8 && v < 12) || (v > 20 && v <= 24)) ? 'warn' : 'bad'; }
+  function zoneSkinTemp(dev)  { if (dev == null) return 'norm'; const a = Math.abs(dev); return a <= 0.3 ? 'good' : a <= 0.8 ? 'warn' : 'bad'; }
+
+  function setZone(id, zone) {
+    const el = $(id);
+    if (!el) return;
+    el.classList.remove('z-good', 'z-norm', 'z-warn', 'z-bad');
+    el.classList.add('z-' + zone);
+  }
+
+  const RING_C = 2 * Math.PI * 88;
+
+  // ============================================================
+  // VERDICT — simple heuristic off Body Battery / Sleep / Stress.
+  // Worst zone among the three drives the overall call; easy to
+  // retune once you're seeing your own real numbers.
+  // ============================================================
+  function renderVerdict(d, zones) {
+    const worst = [zones.battery, zones.sleep, zones.stress].reduce((w, z) => {
+      const rank = { good: 0, norm: 1, warn: 2, bad: 3 };
+      return rank[z] > rank[w] ? z : w;
+    }, 'good');
+
+    const level = worst === 'bad' ? 'red' : (worst === 'warn' ? 'yellow' : 'green');
+    const badgeColors = {
+      green:  { bg: 'rgba(107,227,164,0.16)', border: 'rgba(107,227,164,0.45)', color: '#6BE3A4', text: 'GO' },
+      yellow: { bg: 'rgba(242,192,99,0.16)',  border: 'rgba(242,192,99,0.45)',  color: '#F2C063', text: 'EASE' },
+      red:    { bg: 'rgba(255,107,107,0.16)', border: 'rgba(255,107,107,0.45)', color: '#FF6B6B', text: 'REST' }
+    };
+    const headline = {
+      green:  'High capacity today — good day to push training.',
+      yellow: 'Moderate capacity — train, but stay flexible.',
+      red:    'Low capacity — prioritize recovery today.'
+    };
+
+    const badge = $('grmVerdictBadge');
+    const c = badgeColors[level];
+    badge.textContent = c.text;
+    badge.style.background = c.bg;
+    badge.style.borderColor = c.border;
+    badge.style.color = c.color;
+
+    $('grmVerdictHeadline').textContent = headline[level];
+    $('grmVerdictReasons').textContent =
+      'Body Battery ' + Math.round(d.bodyBattery) + ' · Sleep ' + Math.round(d.sleepScore) + ' · Stress ' + Math.round(d.stressScore);
+
+    const avoidEl = $('grmVerdictAvoid');
+    if (level === 'red') {
+      avoidEl.style.display = '';
+      $('grmVerdictAvoidText').textContent = 'high-intensity intervals, max-effort lifts.';
+    } else {
+      avoidEl.style.display = 'none';
+    }
+    $('grmVerdict').style.display = '';
+  }
+
+  // ============================================================
+  // RENDER — expects a JSON blob shaped like:
+  // {
+  //   bodyBattery: 0-100,
+  //   bodyBatteryLabel: 'Charged' | 'Draining' | 'Low' (optional),
+  //   sleepScore: 0-100,
+  //   sleepDurationMin: number,
+  //   sleepStages: { remMin, deepMin, lightMin, awakeMin },
+  //   stressScore: 0-100 (lower is better),
+  //   hrv: number (ms), hrvStatus: 'balanced'|'unbalanced'|'low' (optional),
+  //   rhr: number (bpm),
+  //   pulseOx: number (percent),
+  //   respirationRate: number (breaths/min),
+  //   skinTempDeviationC: number,
+  //   updatedAt: ISO date string
+  // }
+  // ============================================================
+  function renderGarminData(d) {
+    const zBattery = zoneBodyBattery(d.bodyBattery);
+    $('grmBatteryScore').textContent = Math.round(d.bodyBattery);
+    $('grmBatteryLabel').textContent = d.bodyBatteryLabel || (zBattery === 'good' ? 'Charged' : zBattery === 'bad' ? 'Low' : 'Draining');
+    $('grmBatteryLabel').style.color = { good: 'var(--success)', norm: 'var(--text-secondary)', warn: 'var(--warning)', bad: 'var(--danger)' }[zBattery];
+    $('grmBatteryRingFill').style.strokeDashoffset = String(RING_C * (1 - Math.max(0, Math.min(100, d.bodyBattery)) / 100));
+
+    if (d.sleepStages) {
+      const s = d.sleepStages;
+      const total = (s.remMin || 0) + (s.deepMin || 0) + (s.lightMin || 0) + (s.awakeMin || 0);
+      $('grmStages').style.display = '';
+      $('grmStagesMeta').textContent = total ? Math.floor(total / 60) + 'h ' + (total % 60) + 'm' : '—';
+      if (total > 0) {
+        $('grmStageRem').style.width   = (s.remMin / total * 100) + '%';
+        $('grmStageDeep').style.width  = (s.deepMin / total * 100) + '%';
+        $('grmStageLight').style.width = (s.lightMin / total * 100) + '%';
+        $('grmStageAwake').style.width = (s.awakeMin / total * 100) + '%';
+      }
+      $('grmStageRemTxt').textContent = (s.remMin || 0) + 'm';
+      $('grmStageDeepTxt').textContent = (s.deepMin || 0) + 'm';
+      $('grmStageLightTxt').textContent = (s.lightMin || 0) + 'm';
+      $('grmStageAwakeTxt').textContent = (s.awakeMin || 0) + 'm';
+    } else {
+      $('grmStages').style.display = 'none';
+    }
+
+    const zSleep = zoneSleep(d.sleepScore);
+    $('grmSleepScore').textContent = Math.round(d.sleepScore);
+    $('grmSleepDuration').textContent = d.sleepDurationMin ? Math.floor(d.sleepDurationMin / 60) + 'h ' + (d.sleepDurationMin % 60) + 'm' : '—';
+    setZone('grmZoneSleep', zSleep);
+
+    const zStress = zoneStress(d.stressScore);
+    $('grmStress').textContent = Math.round(d.stressScore);
+    setZone('grmZoneStress', zStress);
+
+    $('grmHrv').textContent = d.hrv != null ? Math.round(d.hrv) : '—';
+    setZone('grmZoneHrv', zoneHrvStatus(d.hrvStatus));
+
+    $('grmRhr').textContent = d.rhr != null ? Math.round(d.rhr) : '—';
+    setZone('grmZoneRhr', zoneRhr(d.rhr));
+
+    $('grmSkinTemp').textContent = d.skinTempDeviationC != null ? (d.skinTempDeviationC > 0 ? '+' : '') + d.skinTempDeviationC.toFixed(1) + '°' : '—';
+    setZone('grmZoneSkin', zoneSkinTemp(d.skinTempDeviationC));
+
+    $('grmSpo2').textContent = d.pulseOx != null ? Math.round(d.pulseOx) + '%' : '—';
+    setZone('grmZoneSpo2', zoneSpo2(d.pulseOx));
+
+    $('grmResp').textContent = d.respirationRate != null ? d.respirationRate.toFixed(1) : '—';
+    setZone('grmZoneResp', zoneResp(d.respirationRate));
+
+    $('grmUpdated').textContent = d.updatedAt ? 'updated ' + new Date(d.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    renderVerdict(d, { battery: zBattery, sleep: zSleep, stress: zStress });
+  }
+
+  async function refreshData(isManualClick) {
+    if (!cfg.proxyUrl) { showDisconnected('No backend proxy configured yet.'); return; }
+    const btn = $('grmRefreshBtn');
+    if (isManualClick && btn) btn.classList.add('spin');
+    try {
+      const res = await fetch(cfg.proxyUrl + '/garmin-data');
+      if (!res.ok) throw new Error('proxy returned ' + res.status);
+      const data = await res.json();
+      showConnected();
+      renderGarminData(data);
+    } catch (e) {
+      showDisconnected("Couldn't reach your Garmin proxy — check the URL in settings.");
+    } finally {
+      if (isManualClick && btn) setTimeout(() => btn.classList.remove('spin'), 600);
+    }
+  }
+  $('grmRefreshBtn').addEventListener('click', () => refreshData(true));
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  function boot() {
+    const connected = localStorage.getItem('garmin_connected') === 'yes' && cfg.proxyUrl;
+    if (connected) refreshData(false);
+    else showDisconnected();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

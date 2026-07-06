@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
+<script src="lock.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+  :root {
+    --text-primary: #FAFAFA;
+    --text-secondary: #B8B6B0;
+    --text-tertiary: #76746E;
+    --success: #6BE3A4;
+    --warning: #F2C063;
+    --danger: #FF6B6B;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: #050506;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    position: relative;
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 82% 14%, rgba(224, 118, 88, 0.16), transparent 45%),
+      radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.06), transparent 45%);
+    filter: blur(40px);
+    animation: dash-wash-drift 36s ease-in-out infinite alternate;
+  }
+
+  @keyframes dash-wash-drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-3%, 3%) scale(1.06); }
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: calc(28px + env(safe-area-inset-top, 0px)) 20px calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dash-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    margin: 0 0 20px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ---------- Bento grid ---------- */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 168px;
+    gap: 14px;
+    grid-auto-flow: dense;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(24px) saturate(1.2);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    text-decoration: none;
+    color: var(--text-primary);
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .tile:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  .tile.big  { grid-column: span 2; grid-row: span 2; }
+  .tile.wide { grid-column: span 2; }
+
+  .tile-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .tile-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+  }
+  .tile-emoji {
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 0 10px var(--accent));
+  }
+  .tile.big .tile-emoji { font-size: 34px; }
+
+  .tile-spacer { flex: 1; }
+
+  .tile-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+  }
+  .tile.big .tile-title { font-size: 27px; }
+
+  .tile-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .tile-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tile-arrow {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 15px;
+    transition: transform 0.2s ease;
+  }
+  .tile:hover .tile-arrow { transform: translateX(4px); }
+
+  @media (max-width: 720px) {
+    .bento-grid { grid-template-columns: repeat(2, 1fr); }
+    .tile.big { grid-row: span 1; }
+  }
+  @media (max-width: 440px) {
+    .bento-grid { grid-template-columns: 1fr; }
+    .tile.big, .tile.wide { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="dash-title">Dashboard</h1>
+
+  <div class="bento-grid">
+
+    <a href="main.html" class="tile big" style="--accent:#6BE3A4">
+      <div class="tile-top">
+        <span class="tile-num">&middot;01</span>
+        <span class="tile-emoji">🏠</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Main</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Goals &amp; daily plan</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+    <a href="gym.html" class="tile wide" style="--accent:#7DD3FC">
+      <div class="tile-top">
+        <span class="tile-num">&middot;02</span>
+        <span class="tile-emoji">💪</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Fitness</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Workouts, splits, sessions</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+    <a href="water.html" class="tile" style="--accent:#60A5FA">
+      <div class="tile-top">
+        <span class="tile-num">&middot;03</span>
+        <span class="tile-emoji">💧</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Water</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Hydration</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+    <a href="finance.html" class="tile wide" style="--accent:#F2C063">
+      <div class="tile-top">
+        <span class="tile-num">&middot;04</span>
+        <span class="tile-emoji">📊</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Finance</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Net worth &amp; spending</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+    <a href="meditation.html" class="tile" style="--accent:#B794F4">
+      <div class="tile-top">
+        <span class="tile-num">&middot;05</span>
+        <span class="tile-emoji">🧘</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Meditate</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Timer &amp; streak</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+    <a href="health.html" class="tile" style="--accent:#3DC2EC">
+      <div class="tile-top">
+        <span class="tile-num">&middot;06</span>
+        <span class="tile-emoji">❤️</span>
+      </div>
+      <div class="tile-spacer"></div>
+      <div class="tile-title">Health</div>
+      <div class="tile-foot">
+        <span class="tile-sub">Garmin recovery</span>
+        <span class="tile-arrow">&rarr;</span>
+      </div>
+    </a>
+
+  </div>
+</div>
+</body>
+</html>

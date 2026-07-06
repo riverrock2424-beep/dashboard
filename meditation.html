@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="lock.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<title>Meditation · Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+
+<style>
+:root {
+  --text-primary: #FAFAFA;
+  --text-secondary: #B8B6B0;
+  --text-tertiary: #76746E;
+  --success: #6BE3A4;
+  --warning: #F2C063;
+  --danger:  #FF6B6B;
+  --accent: #B794F4;
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #050506;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: max(28px, env(safe-area-inset-top)) 20px calc(100px + env(safe-area-inset-bottom));
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 82% 14%, rgba(224, 118, 88, 0.16), transparent 45%),
+    radial-gradient(circle at 18% 90%, rgba(180, 180, 200, 0.06), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: -2;
+  animation: drift 36s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none;
+  z-index: -1;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0,0,0); }
+  100% { transform: translate3d(-22px, 14px, 0); }
+}
+
+.page { max-width: 1100px; margin: 0 auto; }
+
+.dash-title {
+  margin: 0 0 14px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+@media (max-width: 480px) { .dash-title { font-size: 22px; } }
+
+.section { margin-top: 8px; margin-bottom: 18px; }
+.section-title {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title::before {
+  content: ''; width: 18px; height: 1px;
+  background: var(--text-tertiary); opacity: 0.6;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
+}
+
+.gm-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.gm-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+}
+.gm-header-left { display: flex; flex-direction: column; }
+.gm-eyebrow {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary); margin-bottom: 6px;
+}
+.gm-progress-row { display: flex; align-items: baseline; gap: 6px; }
+.gm-progress-num {
+  font-size: 42px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.045em; color: var(--text-primary); line-height: 1;
+}
+.gm-progress-label {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--text-tertiary); margin-left: 4px;
+}
+.gm-streak {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--text-tertiary);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+.stat {
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 14px;
+}
+.stat-num {
+  font-size: 26px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em; color: var(--text-primary); line-height: 1;
+}
+.stat-label {
+  margin-top: 6px;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* Primary (light) button. */
+.gm-add {
+  padding: 11px 20px; border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
+  color: #0A0A0B; font-family: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    0 2px 8px rgba(0,0,0,0.35),
+    0 8px 22px rgba(0,0,0,0.25);
+  transition: transform 0.1s, filter 0.15s;
+}
+.gm-add:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.gm-add:active { transform: translateY(0); }
+
+/* Secondary (ghost) button. */
+.gm-ghost {
+  padding: 11px 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px; background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gm-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+
+/* ---------------- Timer card ---------------- */
+.medi-timer-card { text-align: center; }
+.medi-clock {
+  font-family: var(--font-mono);
+  font-size: 68px; font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 2px;
+  line-height: 1;
+}
+@media (max-width: 480px) { .medi-clock { font-size: 52px; } }
+.medi-phase {
+  font-size: 12px; color: var(--text-tertiary);
+  margin-bottom: 18px;
+}
+.medi-bar {
+  height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden; margin-bottom: 20px;
+}
+.medi-bar-fill {
+  height: 100%; width: 0%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), #6EE7B7);
+  box-shadow: 0 0 10px rgba(183,148,244,0.4);
+  transition: width 0.9s linear;
+}
+.medi-presets {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; margin-bottom: 20px;
+}
+.medi-preset {
+  padding: 8px 16px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.medi-preset:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.medi-preset.active {
+  background: rgba(183,148,244,0.16);
+  border-color: rgba(183,148,244,0.40);
+  color: #E4D9FC;
+}
+.medi-custom {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.24);
+}
+.medi-custom input {
+  width: 48px; background: transparent; border: none; outline: none;
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 13px;
+  text-align: right; -moz-appearance: textfield;
+}
+.medi-custom input::-webkit-outer-spin-button,
+.medi-custom input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.medi-custom span { font-size: 11px; color: var(--text-tertiary); }
+.medi-controls {
+  display: flex; gap: 10px; margin-bottom: 20px;
+}
+.medi-controls .gm-add, .medi-controls .gm-ghost { flex: 1; }
+
+.medi-sounds {
+  display: flex; flex-wrap: wrap; gap: 10px 16px;
+  padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06);
+  text-align: left;
+  justify-content: center;
+}
+.medi-sound-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.medi-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  font-size: 12px; color: var(--text-secondary);
+}
+.medi-toggle input[type="checkbox"] {
+  position: absolute; opacity: 0; pointer-events: none;
+}
+.medi-toggle-track {
+  position: relative; display: inline-block;
+  width: 30px; height: 16px; border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  transition: background 0.2s; flex-shrink: 0;
+}
+.medi-toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #FAFAFA;
+  transition: transform 0.2s, background 0.2s;
+}
+.medi-toggle input:checked ~ .medi-toggle-track { background: var(--accent); }
+.medi-toggle input:checked ~ .medi-toggle-track .medi-toggle-thumb {
+  transform: translateX(14px); background: #1B0F2E;
+}
+.medi-toggle input:checked ~ .medi-toggle-label { color: #E4D9FC; font-weight: 700; }
+.medi-test-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.10);
+  color: var(--text-tertiary); border-radius: 8px;
+  width: 26px; height: 26px; font-size: 11px; cursor: pointer;
+  flex-shrink: 0;
+}
+.medi-test-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.22); }
+
+/* ---------------- Calendar card ---------------- */
+.medi-cal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 4px 0 12px;
+}
+.medi-cal-title {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.10em;
+  text-transform: uppercase; color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+.medi-cal-nav {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-tertiary);
+  width: 28px; height: 28px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-family: inherit;
+  display: flex; align-items: center; justify-content: center;
+}
+.medi-cal-nav:hover { color: var(--text-primary); background: rgba(255,255,255,0.09); }
+.medi-cal-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.medi-cal-dow {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 6px; margin-bottom: 6px;
+}
+.medi-cal-dow span {
+  text-align: center; font-size: 10px; color: var(--text-tertiary);
+  font-weight: 700; letter-spacing: 0.06em;
+}
+.medi-cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+}
+.medi-cal-cell {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,0.025); color: var(--text-tertiary);
+  position: relative;
+}
+.medi-cal-cell.empty { background: transparent; }
+.medi-cal-cell.done {
+  background: rgba(183,148,244,0.18); color: #EDE4FC; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(183,148,244,0.35) inset;
+}
+.medi-cal-cell.today { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.5) inset; }
+.medi-cal-cell.done.today { box-shadow: 0 0 0 1.5px rgba(255,255,255,0.6) inset, 0 0 0 3px rgba(183,148,244,0.30) inset; }
+
+@media (max-width: 480px) {
+  body { padding: max(20px, env(safe-area-inset-top)) 14px calc(90px + env(safe-area-inset-bottom)); }
+  .gm-card { padding: 16px; }
+  .gm-progress-num { font-size: 36px; }
+}
+
+/* ---------------- Shared bottom nav tab bar ---------------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: flex; justify-content: center;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.78) 38%, rgba(10,10,11,0.94) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+.tabbar-inner {
+  pointer-events: auto;
+  display: flex; width: 100%; max-width: 460px;
+  gap: 6px; padding: 6px;
+  background: rgba(20, 20, 22, 0.72);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+}
+.tab {
+  flex: 1 1 0; min-width: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 12px 14px; border-radius: 13px;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  text-decoration: none; background: transparent;
+  border: 1px solid transparent;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab:hover { color: var(--text-primary); }
+.tab[aria-current="page"] {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+}
+.tab-icon {
+  width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tab-icon svg { width: 100%; height: 100%; display: block; }
+@media (max-width: 480px) {
+  .tab { padding: 11px 10px; font-size: 13px; }
+  .tabbar { padding-left: 12px; padding-right: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1 class="dash-title">Meditation</h1>
+
+  <!-- =========================================================== -->
+  <!--  TIMER                                                       -->
+  <!-- =========================================================== -->
+  <div class="section">
+    <div class="section-title">Session</div>
+    <div class="gm-card medi-timer-card">
+      <div class="gm-eyebrow">Meditation timer</div>
+      <div class="medi-clock" id="mediClock">10:00</div>
+      <div class="medi-phase" id="mediPhase">Ready when you are</div>
+
+      <div class="medi-bar"><div class="medi-bar-fill" id="mediBarFill"></div></div>
+
+      <div class="medi-presets" id="mediPresets">
+        <button class="medi-preset" type="button" data-min="5">5m</button>
+        <button class="medi-preset" type="button" data-min="10">10m</button>
+        <button class="medi-preset" type="button" data-min="15">15m</button>
+        <button class="medi-preset" type="button" data-min="20">20m</button>
+        <button class="medi-preset" type="button" data-min="30">30m</button>
+        <div class="medi-custom">
+          <input type="number" id="mediCustomMin" min="1" max="180" inputmode="numeric" placeholder="Custom">
+          <span>min</span>
+        </div>
+      </div>
+
+      <div class="medi-controls">
+        <button class="gm-ghost" id="mediResetBtn" type="button">Reset</button>
+        <button class="gm-add" id="mediStartBtn" type="button">Start</button>
+      </div>
+
+      <div class="medi-sounds">
+        <div class="medi-sound-row">
+          <label class="medi-toggle">
+            <input type="checkbox" id="mediSoundStart" checked>
+            <span class="medi-toggle-track"><span class="medi-toggle-thumb"></span></span>
+            <span class="medi-toggle-label">Start</span>
+          </label>
+          <button class="medi-test-btn" type="button" data-test="start" title="Preview">&#9658;</button>
+        </div>
+        <div class="medi-sound-row">
+          <label class="medi-toggle">
+            <input type="checkbox" id="mediSoundMiddle" checked>
+            <span class="medi-toggle-track"><span class="medi-toggle-thumb"></span></span>
+            <span class="medi-toggle-label">Halfway</span>
+          </label>
+          <button class="medi-test-btn" type="button" data-test="middle" title="Preview">&#9658;</button>
+        </div>
+        <div class="medi-sound-row">
+          <label class="medi-toggle">
+            <input type="checkbox" id="mediSoundEnd" checked>
+            <span class="medi-toggle-track"><span class="medi-toggle-thumb"></span></span>
+            <span class="medi-toggle-label">End</span>
+          </label>
+          <button class="medi-test-btn" type="button" data-test="end" title="Preview">&#9658;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================== -->
+  <!--  STREAK + CALENDAR                                           -->
+  <!-- =========================================================== -->
+  <div class="section">
+    <div class="section-title">Practice</div>
+    <div class="gm-card">
+      <div class="gm-header">
+        <div class="gm-header-left">
+          <div class="gm-eyebrow">Streak</div>
+          <div class="gm-progress-row">
+            <span class="gm-progress-num" id="mediStreakNum">0</span>
+            <span class="gm-progress-label">day streak</span>
+          </div>
+        </div>
+        <span class="gm-streak" id="mediTotalsPill">0 sessions &middot; 0 min total</span>
+      </div>
+
+      <div class="stat-grid" style="margin-bottom:20px">
+        <div class="stat"><div class="stat-num" id="mediMonthSessions">0</div><div class="stat-label">This month</div></div>
+        <div class="stat"><div class="stat-num" id="mediMonthMinutes">0</div><div class="stat-label">Minutes</div></div>
+        <div class="stat"><div class="stat-num" id="mediBestStreak">0</div><div class="stat-label">Best streak</div></div>
+      </div>
+
+      <div class="medi-cal-head">
+        <button class="medi-cal-nav" id="mediCalPrev" type="button" aria-label="Previous month">&larr;</button>
+        <span class="medi-cal-title" id="mediCalTitle">&mdash;</span>
+        <button class="medi-cal-nav" id="mediCalNext" type="button" aria-label="Next month">&rarr;</button>
+      </div>
+      <div class="medi-cal-dow">
+        <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+      </div>
+      <div class="medi-cal-grid" id="mediCalGrid"></div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<div class="tabbar">
+  <div class="tabbar-inner">
+    <a href="index.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+      Home
+    </a>
+    <a href="gym.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 17.5 17.5"/><path d="M21 21l-1.5-1.5"/><path d="M4 4 5.5 5.5"/><path d="M15.5 5.5 18.5 8.5"/><path d="M5.5 15.5 8.5 18.5"/><path d="M9.5 9.5 14.5 14.5"/></svg></span>
+      Gym
+    </a>
+    <a href="water.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.32 0z"/></svg></span>
+      Water
+    </a>
+    <a href="meditation.html" class="tab" aria-current="page">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/><path d="M5 21h14"/></svg></span>
+      Meditate
+    </a>
+    <a href="health.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></span>
+      Health
+    </a>
+    <a href="finance.html" class="tab">
+      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span>
+      Finance
+    </a>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  // ============================================================
+  // STORAGE — medi:log holds one entry per calendar day that had
+  // at least one completed session: { 'YYYY-MM-DD': { count, minutes } }.
+  // medi:settings remembers your last-used duration + sound toggles.
+  // Both are synced to Supabase via the 'medi:' prefix (see bottom).
+  // ============================================================
+  const LOG_KEY = 'medi:log';
+  const SETTINGS_KEY = 'medi:settings';
+
+  function loadLog() {
+    try { return JSON.parse(localStorage.getItem(LOG_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveLog(log) {
+    localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  }
+  function loadSettings() {
+    try {
+      return Object.assign(
+        { lastMinutes: 10, soundStart: true, soundMiddle: true, soundEnd: true },
+        JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}
+      );
+    } catch (e) {
+      return { lastMinutes: 10, soundStart: true, soundMiddle: true, soundEnd: true };
+    }
+  }
+  function saveSettings(s) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  }
+
+  let settings = loadSettings();
+
+  // ============================================================
+  // DATE HELPERS
+  // ============================================================
+  function dateKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function parseKey(k) {
+    const parts = k.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  function todayKey() { return dateKey(new Date()); }
+
+  // ============================================================
+  // TIMER
+  // ============================================================
+  const clockEl = $('mediClock');
+  const phaseEl = $('mediPhase');
+  const barFillEl = $('mediBarFill');
+  const presetsEl = $('mediPresets');
+  const customInput = $('mediCustomMin');
+  const startBtn = $('mediStartBtn');
+  const resetBtn = $('mediResetBtn');
+  const soundStartEl = $('mediSoundStart');
+  const soundMiddleEl = $('mediSoundMiddle');
+  const soundEndEl = $('mediSoundEnd');
+
+  const timer = {
+    totalSeconds: 600,
+    remaining: 600,
+    running: false,
+    intervalId: null,
+    halfwayFired: false,
+  };
+
+  function formatClock(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateClockDisplay() {
+    clockEl.textContent = formatClock(Math.max(0, timer.remaining));
+    const pct = timer.totalSeconds > 0
+      ? Math.min(100, ((timer.totalSeconds - timer.remaining) / timer.totalSeconds) * 100)
+      : 0;
+    barFillEl.style.width = pct + '%';
+  }
+
+  function highlightPreset(minutes) {
+    presetsEl.querySelectorAll('.medi-preset').forEach((b) => {
+      b.classList.toggle('active', parseInt(b.dataset.min, 10) === minutes);
+    });
+  }
+
+  function setDuration(minutes) {
+    minutes = Math.max(1, Math.min(180, Math.round(minutes)));
+    clearInterval(timer.intervalId);
+    timer.running = false;
+    timer.totalSeconds = minutes * 60;
+    timer.remaining = timer.totalSeconds;
+    timer.halfwayFired = false;
+    startBtn.textContent = 'Start';
+    phaseEl.textContent = 'Ready when you are';
+    updateClockDisplay();
+    highlightPreset(minutes);
+    settings.lastMinutes = minutes;
+    saveSettings(settings);
+  }
+
+  // ---- sound synthesis (Web Audio API — no external files) --------
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function playChime(kind) {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      const freqs = kind === 'end' ? [523.25, 659.25, 784.0]
+                  : kind === 'start' ? [440.0, 554.37]
+                  : [493.88, 587.33];
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const peak = 0.22 / (i + 1);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(peak, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 2.3);
+      });
+    } catch (e) { /* audio unavailable — session still runs silently */ }
+  }
+
+  function logSession(minutes) {
+    const log = loadLog();
+    const k = todayKey();
+    if (!log[k]) log[k] = { count: 0, minutes: 0 };
+    log[k].count += 1;
+    log[k].minutes += Math.round(minutes);
+    saveLog(log);
+    renderTracker();
+  }
+
+  function tick() {
+    timer.remaining--;
+    updateClockDisplay();
+    const elapsed = timer.totalSeconds - timer.remaining;
+    if (!timer.halfwayFired && elapsed >= timer.totalSeconds / 2) {
+      timer.halfwayFired = true;
+      if (soundMiddleEl.checked) playChime('middle');
+    }
+    if (timer.remaining <= 0) {
+      clearInterval(timer.intervalId);
+      timer.running = false;
+      if (soundEndEl.checked) playChime('end');
+      phaseEl.textContent = 'Session complete — nicely done.';
+      startBtn.textContent = 'Start';
+      logSession(timer.totalSeconds / 60);
+    }
+  }
+
+  function startTimer() {
+    if (timer.running) return;
+    const isFreshStart = timer.remaining === timer.totalSeconds;
+    timer.running = true;
+    startBtn.textContent = 'Pause';
+    phaseEl.textContent = 'Meditating…';
+    if (isFreshStart && soundStartEl.checked) playChime('start');
+    timer.intervalId = setInterval(tick, 1000);
+  }
+  function pauseTimer() {
+    timer.running = false;
+    clearInterval(timer.intervalId);
+    startBtn.textContent = 'Resume';
+    phaseEl.textContent = 'Paused';
+  }
+  function resetTimer() {
+    setDuration(timer.totalSeconds / 60);
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (timer.running) pauseTimer();
+    else startTimer();
+  });
+  resetBtn.addEventListener('click', resetTimer);
+
+  presetsEl.querySelectorAll('.medi-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      customInput.value = '';
+      setDuration(parseInt(btn.dataset.min, 10));
+    });
+  });
+  function applyCustomMinutes() {
+    const v = parseInt(customInput.value, 10);
+    if (!v || v <= 0) return;
+    setDuration(v);
+  }
+  customInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCustomMinutes(); });
+  customInput.addEventListener('blur', applyCustomMinutes);
+
+  [[soundStartEl, 'soundStart'], [soundMiddleEl, 'soundMiddle'], [soundEndEl, 'soundEnd']].forEach(([el, key]) => {
+    el.addEventListener('change', () => {
+      settings[key] = el.checked;
+      saveSettings(settings);
+    });
+  });
+  document.querySelectorAll('.medi-test-btn').forEach((btn) => {
+    btn.addEventListener('click', () => playChime(btn.dataset.test));
+  });
+
+  // ============================================================
+  // STREAK + CALENDAR TRACKER
+  // ============================================================
+  const streakNumEl = $('mediStreakNum');
+  const totalsPillEl = $('mediTotalsPill');
+  const monthSessionsEl = $('mediMonthSessions');
+  const monthMinutesEl = $('mediMonthMinutes');
+  const bestStreakEl = $('mediBestStreak');
+  const calTitleEl = $('mediCalTitle');
+  const calGridEl = $('mediCalGrid');
+  const calPrevBtn = $('mediCalPrev');
+  const calNextBtn = $('mediCalNext');
+
+  const now = new Date();
+  const calState = { year: now.getFullYear(), month: now.getMonth() }; // month is 0-11
+
+  function computeCurrentStreak(log) {
+    let streak = 0;
+    const cursor = new Date();
+    if (!(log[dateKey(cursor)] && log[dateKey(cursor)].count > 0)) {
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    while (log[dateKey(cursor)] && log[dateKey(cursor)].count > 0) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+  function computeBestStreak(log) {
+    const days = Object.keys(log).filter((k) => log[k] && log[k].count > 0).sort();
+    let best = 0, run = 0, prevTime = null;
+    days.forEach((k) => {
+      const t = parseKey(k).getTime();
+      run = (prevTime !== null && (t - prevTime) === 86400000) ? run + 1 : 1;
+      if (run > best) best = run;
+      prevTime = t;
+    });
+    return best;
+  }
+  function computeTotals(log) {
+    let sessions = 0, minutes = 0;
+    Object.keys(log).forEach((k) => {
+      sessions += log[k].count || 0;
+      minutes += log[k].minutes || 0;
+    });
+    return { sessions, minutes };
+  }
+
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function renderCalendar(log) {
+    calTitleEl.textContent = MONTH_NAMES[calState.month] + ' ' + calState.year;
+
+    const firstOfMonth = new Date(calState.year, calState.month, 1);
+    const startDow = firstOfMonth.getDay(); // 0 = Sun
+    const daysInMonth = new Date(calState.year, calState.month + 1, 0).getDate();
+    const tKey = todayKey();
+
+    let html = '';
+    for (let i = 0; i < startDow; i++) {
+      html += '<div class="medi-cal-cell empty"></div>';
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dt = new Date(calState.year, calState.month, d);
+      const k = dateKey(dt);
+      const done = !!(log[k] && log[k].count > 0);
+      const isToday = k === tKey;
+      const cls = ['medi-cal-cell'];
+      if (done) cls.push('done');
+      if (isToday) cls.push('today');
+      const title = done ? (log[k].count + ' session' + (log[k].count === 1 ? '' : 's') + ' · ' + log[k].minutes + ' min') : '';
+      html += '<div class="' + cls.join(' ') + '"' + (title ? ' title="' + title + '"' : '') + '>' + d + '</div>';
+    }
+    calGridEl.innerHTML = html;
+
+    // Don't let "next month" go into the future.
+    const isCurrentMonth = calState.year === now.getFullYear() && calState.month === now.getMonth();
+    calNextBtn.disabled = isCurrentMonth;
+
+    let mSessions = 0, mMinutes = 0;
+    Object.keys(log).forEach((k) => {
+      const dt = parseKey(k);
+      if (dt.getFullYear() === calState.year && dt.getMonth() === calState.month) {
+        mSessions += log[k].count || 0;
+        mMinutes += log[k].minutes || 0;
+      }
+    });
+    monthSessionsEl.textContent = mSessions;
+    monthMinutesEl.textContent = mMinutes;
+  }
+
+  function renderTracker() {
+    const log = loadLog();
+    streakNumEl.textContent = computeCurrentStreak(log);
+    bestStreakEl.textContent = computeBestStreak(log);
+    const totals = computeTotals(log);
+    totalsPillEl.textContent = totals.sessions + ' session' + (totals.sessions === 1 ? '' : 's') + ' · ' + totals.minutes + ' min total';
+    renderCalendar(log);
+  }
+
+  calPrevBtn.addEventListener('click', () => {
+    calState.month--;
+    if (calState.month < 0) { calState.month = 11; calState.year--; }
+    renderTracker();
+  });
+  calNextBtn.addEventListener('click', () => {
+    if (calNextBtn.disabled) return;
+    calState.month++;
+    if (calState.month > 11) { calState.month = 0; calState.year++; }
+    renderTracker();
+  });
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  soundStartEl.checked = settings.soundStart !== false;
+  soundMiddleEl.checked = settings.soundMiddle !== false;
+  soundEndEl.checked = settings.soundEnd !== false;
+  setDuration(settings.lastMinutes || 10);
+  renderTracker();
+
+  // ============================================================
+  // CLOUD SYNC — mirrors medi:log + medi:settings to every device.
+  // ============================================================
+  if (window.initCloudSync) {
+    window.initCloudSync({
+      appKey: 'meditation',
+      syncedPrefixes: ['medi:'],
+      onApplied: function () {
+        settings = loadSettings();
+        soundStartEl.checked = settings.soundStart !== false;
+        soundMiddleEl.checked = settings.soundMiddle !== false;
+        soundEndEl.checked = settings.soundEnd !== false;
+        renderTracker();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
