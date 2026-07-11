@@ -22,6 +22,19 @@
   --accent: #3DC2EC;
   --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ----- Water section (ported from water.html) ----- */
+  --w-bg-card: #111113;
+  --w-text-1: #ffffff;
+  --w-text-2: rgba(255,255,255,0.6);
+  --w-text-3: rgba(255,255,255,0.4);
+  --w-text-4: rgba(255,255,255,0.25);
+  --w-border: rgba(255,255,255,0.06);
+  --w-border-strong: rgba(255,255,255,0.14);
+  --w-good: #6ee7b7;
+  --w-warn: #fbbf24;
+  --w-bad: #ff8a8a;
+  --w-info: #7DD3FC;
 }
 
 * { box-sizing: border-box; }
@@ -464,6 +477,279 @@ body::after {
   .tab { padding: 11px 10px; font-size: 13px; }
   .tabbar { padding-left: 12px; padding-right: 12px; }
 }
+
+/* ================= Water (ported from water.html) ================= */
+.section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.section-title-row .section-title { margin-bottom: 0; flex: 1; }
+.section-title-row .icon-btn { margin-bottom: 0; }
+
+.day-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--w-border);
+  border-radius: 999px;
+  color: var(--w-text-2);
+  font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.10em;
+  text-transform: uppercase; margin-bottom: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+.day-pill .day-sep { color: var(--w-text-4); }
+
+.card {
+  background: var(--w-bg-card);
+  border: 1px solid var(--w-border);
+  border-radius: 18px;
+  padding: 22px 20px 18px;
+  margin-bottom: 14px;
+}
+
+.water-label {
+  font-size: 10px; letter-spacing: 0.20em; font-weight: 700;
+  color: var(--w-text-3); margin-bottom: 8px; text-transform: uppercase;
+}
+.water-row {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
+}
+.water-num {
+  font-size: 56px; font-weight: 700; letter-spacing: -0.03em;
+  line-height: 1; font-variant-numeric: tabular-nums;
+  color: var(--w-text-1);
+}
+.water-target {
+  font-size: 18px; color: var(--w-text-3); font-weight: 500;
+}
+
+.water-bar-wrap { position: relative; margin: 14px 0 22px; }
+.water-bar-track {
+  position: relative; height: 28px; border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  overflow: hidden;
+}
+.water-bar-fill {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--w-info), var(--w-good));
+  transition: width 0.4s ease;
+  box-shadow: 0 0 18px rgba(110,231,183,0.18);
+}
+.water-bar-fill.over {
+  background: linear-gradient(90deg, var(--w-good), var(--w-warn));
+}
+.water-bar-zone {
+  position: absolute; top: 0; bottom: 0;
+  width: 1px; background: rgba(255,255,255,0.18);
+}
+.water-bar-labels {
+  display: flex; justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px; color: var(--w-text-3);
+  font-family: var(--font-mono);
+}
+.water-bar-labels .water-zone-name {
+  color: var(--w-good); font-weight: 700; letter-spacing: 0.10em;
+  text-transform: lowercase;
+}
+
+.water-actions {
+  display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: stretch;
+}
+.water-minus-btn {
+  background: rgba(255,255,255,0.06);
+  border: none; border-radius: 16px;
+  color: var(--w-text-1);
+  font-size: 22px; font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.water-minus-btn:hover { background: rgba(255,255,255,0.10); }
+.water-minus-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.water-plus-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
+  color: #0a0a0b; border: none; border-radius: 16px;
+  font-family: inherit; font-size: 16px; font-weight: 700;
+  cursor: pointer; padding: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 4px 14px rgba(0,0,0,0.40);
+}
+.water-plus-btn:hover { transform: translateY(-1px); }
+.water-plus-btn:active { transform: scale(0.98); }
+
+.water-helper {
+  text-align: center; font-size: 12px;
+  color: var(--w-text-3); margin-top: 12px;
+  font-style: italic;
+}
+.water-helper.good { color: var(--w-good); font-style: normal; }
+
+.why-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: 1px solid var(--w-border);
+  color: var(--w-text-2); border-radius: 10px;
+  padding: 11px 14px; cursor: pointer; margin-top: 14px;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+}
+.why-toggle:hover { background: rgba(255,255,255,0.04); color: var(--w-text-1); }
+.why-arrow { transition: transform 0.2s; font-size: 14px; }
+.why-toggle[aria-expanded="true"] .why-arrow { transform: rotate(180deg); }
+.why-body {
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--w-border);
+  border-radius: 10px;
+  display: none;
+}
+.why-body.show { display: block; }
+.why-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 13px; padding: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+.why-row .why-label { color: var(--w-text-2); }
+.why-row .why-val   { color: var(--w-text-1); font-weight: 600; font-family: var(--font-mono); }
+.why-row.total {
+  border-top: 1px solid var(--w-border);
+  margin-top: 8px; padding-top: 10px;
+}
+.why-row.total .why-label { color: var(--w-good); font-weight: 700; }
+.why-row.total .why-val   { color: var(--w-good); }
+
+.hist-row {
+  display: grid; grid-template-columns: 70px 1fr auto; gap: 10px;
+  padding: 10px 0; align-items: center;
+  border-bottom: 1px solid var(--w-border);
+  font-size: 13px;
+}
+.hist-row:last-child { border-bottom: none; }
+.hist-date { font-size: 11px; color: var(--w-text-3); font-family: var(--font-mono); }
+.hist-bar-wrap {
+  height: 8px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden;
+}
+.hist-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--w-info), var(--w-good));
+  border-radius: 4px;
+}
+.hist-bar-fill.miss { background: rgba(255,138,138,0.4); }
+.hist-count {
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--w-text-2); font-variant-numeric: tabular-nums;
+}
+
+.spark-wrap { padding: 6px 0; }
+.spark-svg { width: 100%; height: 70px; display: block; }
+.spark-bar { fill: var(--w-good); }
+.spark-bar.miss { fill: rgba(255,138,138,0.5); }
+.spark-target {
+  stroke: rgba(255,255,255,0.20);
+  stroke-width: 1; stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.modal-bg {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.65); backdrop-filter: blur(6px);
+  z-index: 100; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-bg.show { display: flex; }
+.modal {
+  width: 100%; max-width: 480px;
+  background: var(--w-bg-card);
+  border: 1px solid var(--w-border-strong);
+  border-radius: 16px;
+  padding: 22px; max-height: 88vh; overflow-y: auto;
+}
+.modal h3 {
+  margin: 0 0 14px; font-size: 17px; font-weight: 700; color: var(--w-text-1);
+}
+.set-section { margin-bottom: 22px; }
+.set-section h4 {
+  margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--w-text-3);
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.field label {
+  font-size: 11px; color: var(--w-text-3); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.field-note { font-size: 11px; color: var(--w-text-3); margin-top: 4px; line-height: 1.4; font-style: italic; }
+.field input:disabled { opacity: 0.55; cursor: not-allowed; }
+.field input[type="number"], .field input[type="text"], .field select {
+  background: rgba(0,0,0,0.28);
+  border: 1px solid var(--w-border);
+  color: var(--w-text-1);
+  font-family: inherit; font-size: 14px;
+  padding: 10px 12px; border-radius: 10px; outline: none;
+  -moz-appearance: textfield;
+}
+.field input[type="number"]::-webkit-outer-spin-button,
+.field input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.field input:focus, .field select:focus {
+  border-color: rgba(110,231,183,0.40);
+  box-shadow: 0 0 0 2px rgba(110,231,183,0.10);
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg {
+  display: flex; gap: 4px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--w-border);
+  border-radius: 10px; padding: 3px;
+}
+.seg button {
+  flex: 1; padding: 9px; border: none; background: transparent;
+  color: var(--w-text-3); border-radius: 7px;
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.seg button.active {
+  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
+  color: #0a0a0b;
+}
+
+.btn-primary {
+  width: 100%; padding: 13px;
+  border: none;
+  background: linear-gradient(180deg, #ffffff 0%, #e8e5dd 100%);
+  color: #0a0a0b; border-radius: 12px;
+  font-family: inherit; font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.55), 0 4px 14px rgba(0,0,0,0.40);
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-secondary {
+  padding: 11px 16px;
+  border: 1px solid var(--w-border);
+  background: rgba(255,255,255,0.04);
+  color: var(--w-text-1); border-radius: 10px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.10); }
+.modal-actions {
+  display: flex; gap: 8px; margin-top: 16px;
+}
+.modal-actions .btn-primary { flex: 1; }
+
+@media (max-width: 480px) {
+  .water-num { font-size: 48px; }
+}
+.modal-bg {
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  padding-top: max(20px, env(safe-area-inset-top));
+}
+.modal {
+  max-height: calc(88vh - env(safe-area-inset-bottom));
+}
+.water-plus-btn,
+.water-minus-btn {
+  margin-bottom: max(0px, env(safe-area-inset-bottom));
+}
 </style>
 </head>
 <body>
@@ -649,6 +935,64 @@ body::after {
     </div>
   </div>
 
+  <!-- Water — ported from water.html; same po_water_v1 localStorage key,
+       so this stays in sync with the topbar's water pill automatically. -->
+  <div class="section">
+    <div class="section-title-row">
+      <div class="section-title">Water</div>
+      <button class="icon-btn" id="waterSettingsBtn" title="Water settings" aria-label="Water settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+
+    <button class="day-pill" id="waterDayPill" type="button">
+      <span id="waterDayPillLabel">&mdash;</span>
+    </button>
+
+    <div class="card">
+      <div class="water-label" id="waterUnitLabel">ML DRANK TODAY</div>
+      <div class="water-row">
+        <span class="water-num" id="waterNum">0</span>
+        <span class="water-target" id="waterTarget">/ 9</span>
+      </div>
+
+      <div class="water-bar-wrap">
+        <div class="water-bar-track">
+          <div class="water-bar-fill" id="waterBarFill" style="width:0%"></div>
+          <div class="water-bar-zone" id="waterBarZoneStart" style="left:65%"></div>
+        </div>
+        <div class="water-bar-labels">
+          <span id="waterBarMin">0</span>
+          <span class="water-zone-name">healthy zone</span>
+          <span id="waterBarMax">2800 ml</span>
+        </div>
+      </div>
+
+      <div class="water-actions">
+        <button class="water-minus-btn" id="waterMinusBtn" type="button" aria-label="Undo last">&minus;</button>
+        <button class="water-plus-btn" id="waterPlusBtn" type="button">
+          <span id="waterPlusLabel">Drank a bottle</span>
+          <span>+</span>
+        </button>
+      </div>
+      <div class="water-helper" id="waterHelper">Start the day — first one in.</div>
+
+      <button class="why-toggle" id="whyToggle" type="button" aria-expanded="false">
+        <span>Why this target?</span>
+        <span class="why-arrow">▾</span>
+      </button>
+      <div class="why-body" id="whyBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="water-label">LAST 14 DAYS</div>
+      <div class="spark-wrap">
+        <svg class="spark-svg" id="sparkSvg" viewBox="0 0 280 70" preserveAspectRatio="none"></svg>
+      </div>
+      <div id="histList" style="margin-top:14px"></div>
+    </div>
+  </div>
+
 </div><!-- /.page -->
 
 <!-- Setup overlay — shown until a backend proxy URL is saved -->
@@ -672,6 +1016,83 @@ body::after {
   </div>
 </div>
 
+<!-- Water settings modal — ported from water.html -->
+<div class="modal-bg" id="setModalBg">
+  <div class="modal">
+    <h3>Water settings</h3>
+
+    <div class="set-section">
+      <h4>Profile</h4>
+      <div class="field-row">
+        <div class="field">
+          <label>Weight</label>
+          <input type="number" id="setWeight" step="0.5" min="20" max="300">
+          <div class="field-note" id="setWeightNote" style="display:none">Synced from Gym's weight tracker — log a weigh-in there to update this.</div>
+        </div>
+        <div class="field">
+          <label>Weight unit</label>
+          <div class="seg" id="setWeightUnit">
+            <button data-u="kg">kg</button>
+            <button data-u="lb">lb</button>
+          </div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Age</label>
+          <input type="number" id="setAge" min="13" max="100">
+        </div>
+        <div class="field">
+          <label>Sex</label>
+          <div class="seg" id="setSex">
+            <button data-s="m">Male</button>
+            <button data-s="f">Female</button>
+            <button data-s="o">Other</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Activity (training hours per week)</label>
+        <input type="number" id="setActivity" min="0" max="40" step="0.5">
+        <div class="field-note" id="setActivityNote" style="display:none">Synced from Gym — counts "Mark workout done" days this week (~1h/session assumed).</div>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <h4>Weather</h4>
+      <div class="field">
+        <div id="weatherStatus" style="font-size:13px;color:var(--w-text-2)">Checking local weather&hellip;</div>
+        <button class="btn-secondary" id="weatherRefreshBtn" type="button" style="margin-top:8px">Refresh weather</button>
+        <div style="font-size:11px;color:var(--w-text-3);margin-top:8px;line-height:1.4">
+          Hot weather adds to your target. Uses your browser's location (never leaves your device except to fetch the forecast) via Open-Meteo — no account or API key needed.
+        </div>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <h4>Display</h4>
+      <div class="field">
+        <label>ml increment (per tap)</label>
+        <input type="number" id="setMlIncrement" min="10" max="1000" step="10">
+      </div>
+    </div>
+
+    <div class="set-section">
+      <h4>Data</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-secondary" id="setExport">Export JSON</button>
+        <button class="btn-secondary" id="setImport">Import JSON</button>
+        <button class="btn-secondary" id="setReset" style="color:var(--w-bad);border-color:rgba(255,138,138,0.3)">Reset all</button>
+      </div>
+      <input type="file" id="setImportFile" accept=".json" style="display:none">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-primary" id="setClose">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="tabbar">
   <div class="tabbar-inner">
     <a href="index.html" class="tab">
@@ -681,10 +1102,6 @@ body::after {
     <a href="gym.html" class="tab">
       <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5 17.5 17.5"/><path d="M21 21l-1.5-1.5"/><path d="M4 4 5.5 5.5"/><path d="M15.5 5.5 18.5 8.5"/><path d="M5.5 15.5 8.5 18.5"/><path d="M9.5 9.5 14.5 14.5"/></svg></span>
       Gym
-    </a>
-    <a href="water.html" class="tab">
-      <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.32 0z"/></svg></span>
-      Water
     </a>
     <a href="meditation.html" class="tab">
       <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><path d="M5 21c0-4 3-7 7-7s7 3 7 7"/><path d="M5 21h14"/></svg></span>
@@ -1087,6 +1504,442 @@ body::after {
   }
 
   boot();
+})();
+</script>
+
+<!-- Water — ported from water.html; same CONFIG/state shape, so it reads
+     and writes the exact same po_water_v1 localStorage key. -->
+<script>
+const WATER_CONFIG = {
+  appTitle: "Water Coach",
+  mlIncrement: 100,
+  profile: {
+    weightKg: 75,
+    age: 25,
+    sex: "m",
+    activityHrsPerWeek: 5
+  }
+};
+</script>
+<script>
+(function() {
+  const $ = (id) => document.getElementById(id);
+  const CONFIG = WATER_CONFIG;
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  const LS_KEY = 'po_water_v1';
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) return normalize(JSON.parse(raw));
+    } catch (e) {}
+    return normalize({});
+  }
+  function normalize(s) {
+    s = s || {};
+    s.mlIncrement = s.mlIncrement || CONFIG.mlIncrement || 100;
+    s.weightUnit = s.weightUnit || 'kg';
+    s.profile = Object.assign({}, CONFIG.profile, s.profile || {});
+    s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};  // {YYYY-MM-DD: number_of_servings}
+    return s;
+  }
+  function saveState() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  let state = loadState();
+
+  // Helpers
+  function dateKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function todayKey() { return dateKey(new Date()); }
+  function todayCount() { return state.logs[todayKey()] || 0; }
+  function setTodayCount(n) {
+    const k = todayKey();
+    if (n <= 0) delete state.logs[k];
+    else state.logs[k] = n;
+    saveState();
+  }
+
+  // ============================================================
+  // GYM INTEGRATION — gym.html already tracks bodyweight (weigh-ins)
+  // and actual training days. Reuse that instead of asking for the
+  // same numbers again here. Reads gym.html's own localStorage keys
+  // directly (same browser/origin) — only populated once gym.html has
+  // been opened at least once on this device, since that's what pulls
+  // its cloud-synced data down locally.
+  // ============================================================
+  function readGymWeightKg() {
+    try {
+      const entries = JSON.parse(localStorage.getItem('po_coach_weights'));
+      if (!Array.isArray(entries) || !entries.length) return null;
+      entries.sort((a, b) => (a.dateKey || '').localeCompare(b.dateKey || ''));
+      const last = entries[entries.length - 1];
+      if (!last || last.weight == null) return null;
+      const coach = JSON.parse(localStorage.getItem('po_coach_v1')) || {};
+      return coach.units === 'lb' ? last.weight / 2.20462 : last.weight;
+    } catch (e) { return null; }
+  }
+  function readGymActivityHrsPerWeek() {
+    try {
+      const doneDays = JSON.parse(localStorage.getItem('po_coach_workout_done'));
+      if (!doneDays || typeof doneDays !== 'object') return null;
+      let sessions = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        if (doneDays[dateKey(d)]) sessions++;
+      }
+      // gym.html doesn't log session length, so this assumes ~1h/session —
+      // a reasonable average gym visit, not an exact figure.
+      return sessions;
+    } catch (e) { return null; }
+  }
+
+  // ============================================================
+  // WEATHER — hot weather raises fluid needs. Uses the browser's own
+  // geolocation + Open-Meteo (free, no API key/account) for current
+  // temperature, cached for 45 min so we're not re-fetching constantly.
+  // ============================================================
+  const WEATHER_CACHE_KEY = 'po_water_weather_v1';
+  const WEATHER_MAX_AGE_MS = 45 * 60 * 1000;
+  let weatherState = (function () {
+    try { return JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)) || null; } catch (e) { return null; }
+  })();
+
+  function weatherExtraMl(tempC) {
+    if (tempC == null || tempC <= 20) return 0;
+    // Heuristic, not a clinical figure: +40ml/day per °C above 20, capped at 1000ml.
+    return Math.min(1000, (tempC - 20) * 40);
+  }
+
+  function refreshWeather(force) {
+    const status = $('weatherStatus');
+    const fresh = weatherState && weatherState.tempC != null && (Date.now() - weatherState.fetchedAt) < WEATHER_MAX_AGE_MS;
+    if (fresh && !force) {
+      if (status) status.textContent = Math.round(weatherState.tempC) + '°C right now — factored into your target.';
+      return;
+    }
+    if (!navigator.geolocation) {
+      if (status) status.textContent = 'Location not available in this browser — weather isn\'t factored in.';
+      return;
+    }
+    if (status) status.textContent = 'Checking local weather…';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + latitude + '&longitude=' + longitude + '&current=temperature_2m')
+          .then((res) => res.json())
+          .then((data) => {
+            const tempC = data && data.current ? data.current.temperature_2m : null;
+            if (tempC == null) throw new Error('no temperature in response');
+            weatherState = { tempC, fetchedAt: Date.now() };
+            try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(weatherState)); } catch (e) {}
+            if (status) status.textContent = Math.round(tempC) + '°C right now — factored into your target.';
+            renderWater();
+          })
+          .catch(() => { if (status) status.textContent = 'Could not reach the weather service — try again later.'; });
+      },
+      () => { if (status) status.textContent = 'Location permission denied — weather isn\'t factored in.'; },
+      { timeout: 8000, maximumAge: WEATHER_MAX_AGE_MS }
+    );
+  }
+
+  // ============================================================
+  // CALCULATOR — daily water target in ml
+  //
+  //   base_ml    = weight_kg × 35 ml      (NAM/IOM standard)
+  //   exercise   = activity_hrs/wk ÷ 7 × 500 ml/day   (≈500 ml/hr training)
+  //   weather    = extra ml on hot days (see weatherExtraMl)
+  //   adjustments: +200 ml male, +100 ml age 50+
+  //
+  //   Weight and activity prefer live gym.html data over the manually
+  //   entered profile fields, when gym.html has any — see readGymWeightKg
+  //   / readGymActivityHrsPerWeek above.
+  // ============================================================
+  function computeTargetMl() {
+    const p = state.profile;
+    const gymWeightKg = readGymWeightKg();
+    const gymActivity = readGymActivityHrsPerWeek();
+    const wKg = gymWeightKg != null ? gymWeightKg : (state.weightUnit === 'lb' ? p.weightKg / 2.20462 : p.weightKg);
+    const activityHrs = gymActivity != null ? gymActivity : (p.activityHrsPerWeek || 0);
+    const base = wKg * 35;
+    const exercise = activityHrs / 7 * 500;
+    const weather = weatherExtraMl(weatherState ? weatherState.tempC : null);
+    let adjust = 0;
+    if (p.sex === 'm') adjust += 200;
+    if ((p.age || 0) >= 50) adjust += 100;
+    return {
+      base, exercise, weather, adjust,
+      usingGymWeight: gymWeightKg != null,
+      usingGymActivity: gymActivity != null,
+      total: base + exercise + weather + adjust
+    };
+  }
+
+  function fmtMl(ml) {
+    if (ml >= 1000) return (ml / 1000).toFixed(1) + ' L';
+    return Math.round(ml) + ' ml';
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  function renderDayPill() {
+    const d = new Date();
+    const dows = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+    const mons = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    $('waterDayPillLabel').textContent = dows[d.getDay()] + ', ' + mons[d.getMonth()] + ' ' + d.getDate();
+  }
+
+  function renderWater() {
+    const calc = computeTargetMl();
+    const count = todayCount();
+    const drankMl = count * (state.mlIncrement || 100);
+    const targetMl = Math.round(calc.total);
+
+    $('waterUnitLabel').textContent = 'ML DRANK TODAY';
+    $('waterNum').textContent = drankMl;
+    $('waterTarget').textContent = '/ ' + targetMl + ' ml';
+    $('waterPlusLabel').textContent = 'Drank ' + (state.mlIncrement || 100) + ' ml';
+
+    // Progress bar always ends exactly at your target — 100% width = goal
+    // met, full stop. No 150%-scale here; that was what made the bar look
+    // like the goal was higher than it actually is. Drinking past target
+    // just holds the bar full and switches to the "over" color.
+    const pctRaw = targetMl > 0 ? (drankMl / targetMl) * 100 : 0;
+    const fillPct = Math.min(100, pctRaw);
+    const fill = $('waterBarFill');
+    fill.style.width = fillPct + '%';
+    fill.classList.toggle('over', pctRaw > 100);
+    $('waterBarMin').textContent = '0 ml';
+    $('waterBarMax').textContent = targetMl + ' ml';
+    // Healthy zone starts at 65% of the target.
+    $('waterBarZoneStart').style.left = '65%';
+
+    // Helper text
+    const helper = $('waterHelper');
+    if (count === 0) { helper.textContent = 'Start the day — first one in.'; helper.classList.remove('good'); }
+    else if (pctRaw < 50) { helper.textContent = 'Behind pace — drink one in the next hour.'; helper.classList.remove('good'); }
+    else if (pctRaw < 100) {
+      helper.textContent = Math.max(0, targetMl - drankMl) + ' ml to go. Pacing well.';
+      helper.classList.remove('good');
+    }
+    else if (pctRaw < 130) { helper.textContent = '✓ Target hit — top up if you train this evening.'; helper.classList.add('good'); }
+    else { helper.textContent = 'Strong — way past target.'; helper.classList.add('good'); }
+
+    // Disable minus when at zero
+    $('waterMinusBtn').disabled = count <= 0;
+
+    renderWhy(calc);
+    renderHistory();
+    renderSparkline(targetMl);
+  }
+
+  function renderWhy(calc) {
+    const wrap = $('whyBody');
+    const u = state.weightUnit;
+    const wDisp = calc.usingGymWeight ? 'from Gym' : (state.profile.weightKg.toFixed(0) + ' ' + u);
+    let html = '';
+    html += '<div class="why-row"><span class="why-label">Base (' + wDisp + ' × 35 ml)</span><span class="why-val">' + fmtMl(calc.base) + '</span></div>';
+    if (calc.exercise > 0) {
+      const exLabel = calc.usingGymActivity ? 'from Gym, this week' : (state.profile.activityHrsPerWeek + ' h/wk');
+      html += '<div class="why-row"><span class="why-label">+ Exercise (' + exLabel + ')</span><span class="why-val">+ ' + fmtMl(calc.exercise) + '</span></div>';
+    }
+    if (calc.weather > 0)
+      html += '<div class="why-row"><span class="why-label">+ Hot weather (' + Math.round(weatherState.tempC) + '°C)</span><span class="why-val">+ ' + fmtMl(calc.weather) + '</span></div>';
+    if (calc.adjust > 0)
+      html += '<div class="why-row"><span class="why-label">+ Sex / age adjustment</span><span class="why-val">+ ' + fmtMl(calc.adjust) + '</span></div>';
+    html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + fmtMl(calc.total) + '</span></div>';
+    wrap.innerHTML = html;
+  }
+
+  function renderHistory() {
+    const list = $('histList');
+    const target = Math.round(computeTargetMl().total);
+    const inc = state.mlIncrement || 100;
+    // Last 7 days
+    const days = [];
+    for (let i = 6; i >= 1; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const k = dateKey(d);
+      const ml = (state.logs[k] || 0) * inc;
+      days.push({ date: d, key: k, ml });
+    }
+    list.innerHTML = days.map(({date, ml}) => {
+      const dows = ['Sun','Mon','Tue','Wed','THU','Fri','Sat'];
+      const lbl = dows[date.getDay()] + ' ' + (date.getMonth()+1) + '/' + date.getDate();
+      const pct = Math.min(100, (ml / target) * 100);
+      const cls = (ml >= target) ? '' : 'miss';
+      return '<div class="hist-row">'
+        + '<span class="hist-date">' + lbl + '</span>'
+        + '<div class="hist-bar-wrap"><div class="hist-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
+        + '<span class="hist-count">' + ml + '/' + target + 'ml</span>'
+        + '</div>';
+    }).join('') || '<div style="text-align:center;font-size:12px;color:var(--w-text-3);padding:12px 0">No logs yet.</div>';
+  }
+
+  function renderSparkline(target) {
+    const svg = $('sparkSvg');
+    const W = 280, H = 70, pad = 4;
+    const days = 14;
+    const inc = state.mlIncrement || 100;
+    const data = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const k = dateKey(d);
+      data.push((state.logs[k] || 0) * inc);
+    }
+    const maxVal = Math.max(target, Math.max.apply(null, data)) || 1;
+    const colW = (W - pad * 2) / data.length;
+    const barW = colW * 0.7;
+    let html = '';
+    // Target line
+    const targetY = H - pad - (target / maxVal) * (H - pad * 2);
+    html += '<line class="spark-target" x1="0" x2="' + W + '" y1="' + targetY.toFixed(1) + '" y2="' + targetY.toFixed(1) + '"/>';
+    data.forEach((v, i) => {
+      const x = pad + i * colW + (colW - barW) / 2;
+      const h = (v / maxVal) * (H - pad * 2);
+      const y = H - pad - h;
+      const cls = (v >= target) ? 'spark-bar' : 'spark-bar miss';
+      html += '<rect class="' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(0, h).toFixed(1) + '" rx="2"/>';
+    });
+    svg.innerHTML = html;
+  }
+
+  function renderAll() { renderDayPill(); renderWater(); }
+
+  // ============================================================
+  // EVENT WIRING
+  // ============================================================
+  $('waterPlusBtn').addEventListener('click', () => {
+    setTodayCount(todayCount() + 1);
+    renderWater();
+    const btn = $('waterPlusBtn');
+    btn.style.transform = 'scale(0.97)';
+    setTimeout(() => { btn.style.transform = ''; }, 120);
+  });
+  $('waterMinusBtn').addEventListener('click', () => {
+    setTodayCount(Math.max(0, todayCount() - 1));
+    renderWater();
+  });
+
+  $('whyToggle').addEventListener('click', () => {
+    const body = $('whyBody');
+    const open = body.classList.contains('show');
+    body.classList.toggle('show');
+    $('whyToggle').setAttribute('aria-expanded', open ? 'false' : 'true');
+  });
+
+  // ============================================================
+  // SETTINGS
+  // ============================================================
+  function renderSettings() {
+    const gymWeightKg = readGymWeightKg();
+    const gymActivity = readGymActivityHrsPerWeek();
+
+    if (gymWeightKg != null) {
+      $('setWeight').value = (state.weightUnit === 'lb' ? gymWeightKg * 2.20462 : gymWeightKg).toFixed(1);
+    } else {
+      $('setWeight').value = state.profile.weightKg;
+    }
+    $('setWeight').disabled = gymWeightKg != null;
+    $('setWeightNote').style.display = gymWeightKg != null ? '' : 'none';
+    $('setWeightUnit').querySelectorAll('button').forEach(b => { b.disabled = gymWeightKg != null; });
+
+    $('setAge').value = state.profile.age;
+
+    if (gymActivity != null) {
+      $('setActivity').value = gymActivity;
+    } else {
+      $('setActivity').value = state.profile.activityHrsPerWeek;
+    }
+    $('setActivity').disabled = gymActivity != null;
+    $('setActivityNote').style.display = gymActivity != null ? '' : 'none';
+
+    $('setMlIncrement').value = state.mlIncrement;
+
+    setSegActive('setWeightUnit', state.weightUnit);
+    setSegActive('setSex', state.profile.sex);
+
+    refreshWeather(false);
+  }
+  function setSegActive(segId, value) {
+    $(segId).querySelectorAll('button').forEach(b => {
+      const v = b.dataset.u || b.dataset.s;
+      b.classList.toggle('active', v === value);
+    });
+  }
+  function bindSeg(segId, attr, onPick) {
+    $(segId).querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const v = b.dataset[attr];
+        $(segId).querySelectorAll('button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        onPick(v);
+      });
+    });
+  }
+  bindSeg('setWeightUnit', 'u', (v) => { state.weightUnit = v; saveState(); renderWater(); });
+  bindSeg('setSex', 's', (v) => { state.profile.sex = v; saveState(); renderWater(); });
+
+  ['setWeight','setAge','setActivity','setMlIncrement'].forEach(id => {
+    $(id).addEventListener('input', () => {
+      const v = parseFloat($(id).value);
+      if (id === 'setWeight') state.profile.weightKg = v || 0;
+      else if (id === 'setAge') state.profile.age = v || 0;
+      else if (id === 'setActivity') state.profile.activityHrsPerWeek = v || 0;
+      else if (id === 'setMlIncrement') state.mlIncrement = v || 100;
+      saveState(); renderWater();
+    });
+  });
+
+  $('waterSettingsBtn').addEventListener('click', () => {
+    renderSettings();
+    $('setModalBg').classList.add('show');
+  });
+  $('setClose').addEventListener('click', () => $('setModalBg').classList.remove('show'));
+  $('weatherRefreshBtn').addEventListener('click', () => refreshWeather(true));
+
+  // Export / import / reset
+  $('setExport').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'water-coach-data-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click(); URL.revokeObjectURL(url);
+  });
+  $('setImport').addEventListener('click', () => $('setImportFile').click());
+  $('setImportFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const parsed = JSON.parse(r.result);
+        if (!confirm('Replace ALL current water data with the imported file?')) return;
+        state = normalize(parsed);
+        saveState(); renderSettings(); renderAll();
+      } catch (err) { alert('Import failed: ' + err.message); }
+    };
+    r.readAsText(f);
+  });
+  $('setReset').addEventListener('click', () => {
+    if (!confirm('Wipe ALL water logs and settings? This cannot be undone.')) return;
+    localStorage.removeItem(LS_KEY);
+    state = loadState();
+    $('setModalBg').classList.remove('show');
+    renderAll();
+  });
+
+  $('waterDayPill').addEventListener('click', () => {}); // day pill is informational only
+
+  // BOOT
+  renderAll();
+  refreshWeather(false);
 })();
 </script>
 </body>
