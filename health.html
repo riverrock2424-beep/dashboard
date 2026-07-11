@@ -302,12 +302,11 @@ body::after {
 .grm-stat-sub { font-size: 10px; color: var(--text-tertiary); margin-top: 5px; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 @media (max-width: 480px) { .grm-stats { grid-template-columns: repeat(2, 1fr); } .grm-stat-value { font-size: 20px; } }
 
-/* ===== Biomarker strip ===== */
-.grm-bio { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+/* ===== Activity strip ===== */
+.grm-bio { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
 .grm-bio-item { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; text-align: center; }
 .grm-bio-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
 .grm-bio-val { font-size: 14px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-@media (max-width: 480px) { .grm-bio { grid-template-columns: repeat(2, 1fr); } }
 
 /* ===== Zone dot system ===== */
 .grm-stat, .grm-bio-item { position: relative; }
@@ -534,7 +533,7 @@ body::after {
                   <span class="grm-hr-eyebrow">Heart rate</span>
                   <span class="grm-hr-meta" id="grmHrMeta">&mdash;</span>
                 </div>
-                <svg class="grm-hr-svg" id="grmHrSvg" viewBox="0 0 300 130" preserveAspectRatio="none" aria-hidden="true"></svg>
+                <svg class="grm-hr-svg" id="grmHrSvg" viewBox="0 0 300 130" aria-hidden="true"></svg>
                 <div class="grm-hr-empty" id="grmHrEmpty" style="display:none">No heart rate data for today yet.</div>
                 <div class="grm-hr-stats">
                   <div class="grm-hr-stat"><span class="grm-hr-stat-label">Resting</span><span class="grm-hr-stat-val" id="grmHrResting">&mdash;</span></div>
@@ -598,7 +597,7 @@ body::after {
           </div>
         </div>
 
-        <!-- Biomarker + activity strip -->
+        <!-- Activity strip -->
         <div class="grm-bio">
           <div class="grm-bio-item">
             <span class="grm-zone" id="grmZoneSteps"></span>
@@ -608,16 +607,6 @@ body::after {
           <div class="grm-bio-item">
             <span class="grm-bio-label">Calories</span>
             <span class="grm-bio-val" id="grmCalories">&mdash;</span>
-          </div>
-          <div class="grm-bio-item">
-            <span class="grm-zone" id="grmZoneSpo2"></span>
-            <span class="grm-bio-label">Pulse Ox</span>
-            <span class="grm-bio-val" id="grmSpo2">&mdash;</span>
-          </div>
-          <div class="grm-bio-item">
-            <span class="grm-zone" id="grmZoneResp"></span>
-            <span class="grm-bio-label">Resp rate</span>
-            <span class="grm-bio-val" id="grmResp">&mdash;</span>
           </div>
         </div>
 
@@ -808,8 +797,6 @@ body::after {
   function zoneStress(v)      { if (v == null) return 'norm'; return v <= 25 ? 'good' : v <= 50 ? 'norm' : v <= 75 ? 'warn' : 'bad'; }
   function zoneHrvStatus(s)   { return s === 'balanced' ? 'good' : s === 'unbalanced' ? 'warn' : s === 'low' ? 'bad' : 'norm'; }
   function zoneRhr(v)         { if (v == null) return 'norm'; return v <= 60 ? 'good' : v <= 70 ? 'norm' : v <= 80 ? 'warn' : 'bad'; }
-  function zoneSpo2(v)        { if (v == null) return 'norm'; return v >= 95 ? 'good' : v >= 90 ? 'warn' : 'bad'; }
-  function zoneResp(v)        { if (v == null) return 'norm'; return (v >= 12 && v <= 20) ? 'good' : ((v >= 8 && v < 12) || (v > 20 && v <= 24)) ? 'warn' : 'bad'; }
   // Progress toward Garmin's own daily step goal, not a fixed health cutoff.
   function zoneSteps(steps, goal) {
     if (steps == null || !goal) return 'norm';
@@ -881,8 +868,6 @@ body::after {
   //   stressScore: 0-100 (lower is better),
   //   hrv: number (ms), hrvStatus: 'balanced'|'unbalanced'|'low' (optional),
   //   rhr: number (bpm),
-  //   pulseOx: number (percent),
-  //   respirationRate: number (breaths/min),
   //   steps: number, stepGoal: number,
   //   caloriesBurned: number,
   //   heartRate: { points: [[timestampMs, bpm], ...], resting, min, max } (optional),
@@ -931,12 +916,6 @@ body::after {
     $('grmRhr').textContent = d.rhr != null ? Math.round(d.rhr) : '—';
     setZone('grmZoneRhr', zoneRhr(d.rhr));
 
-    $('grmSpo2').textContent = d.pulseOx != null ? Math.round(d.pulseOx) + '%' : '—';
-    setZone('grmZoneSpo2', zoneSpo2(d.pulseOx));
-
-    $('grmResp').textContent = d.respirationRate != null ? d.respirationRate.toFixed(1) : '—';
-    setZone('grmZoneResp', zoneResp(d.respirationRate));
-
     $('grmSteps').textContent = d.steps != null ? Math.round(d.steps).toLocaleString() : '—';
     setZone('grmZoneSteps', zoneSteps(d.steps, d.stepGoal));
 
@@ -975,7 +954,10 @@ body::after {
     const fmtT = (dt) => dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     $('grmHrMeta').textContent = fmtT(first) + ' – ' + fmtT(last);
 
-    const W = 300, H = 130, padX = 4, padY = 10;
+    // Reserve space on the left for bpm labels and along the bottom for
+    // time-of-day labels — the plot area is inset from the full viewBox.
+    const W = 300, H = 130;
+    const padL = 26, padR = 4, padT = 10, padB = 16;
     const minT = points[0][0], maxT = points[points.length - 1][0];
     const bpms = points.map(p => p[1]);
     const minBpm = Math.min.apply(null, bpms) - 4;
@@ -983,17 +965,46 @@ body::after {
     const spanT = Math.max(1, maxT - minT);
     const spanBpm = Math.max(1, maxBpm - minBpm);
 
-    const x = (t) => padX + ((t - minT) / spanT) * (W - padX * 2);
-    const y = (v) => H - padY - ((v - minBpm) / spanBpm) * (H - padY * 2);
+    const x = (t) => padL + ((t - minT) / spanT) * (W - padL - padR);
+    const y = (v) => (H - padB) - ((v - minBpm) / spanBpm) * (H - padT - padB);
 
     const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + x(p[0]).toFixed(1) + ' ' + y(p[1]).toFixed(1)).join(' ');
     const areaPath = linePath
-      + ' L' + x(points[points.length - 1][0]).toFixed(1) + ' ' + (H - padY)
-      + ' L' + x(points[0][0]).toFixed(1) + ' ' + (H - padY) + ' Z';
+      + ' L' + x(points[points.length - 1][0]).toFixed(1) + ' ' + (H - padB)
+      + ' L' + x(points[0][0]).toFixed(1) + ' ' + (H - padB) + ' Z';
+
+    // Y-axis: min / mid / max bpm, with faint gridlines for reference.
+    const midBpm = (minBpm + maxBpm) / 2;
+    const yTicks = [maxBpm, midBpm, minBpm];
+    let axisHtml = '';
+    yTicks.forEach((v) => {
+      const yy = y(v).toFixed(1);
+      axisHtml += '<line x1="' + padL + '" x2="' + (W - padR) + '" y1="' + yy + '" y2="' + yy + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+      axisHtml += '<text class="grm-hr-axis-label" x="' + (padL - 4) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle">' + Math.round(v) + '</text>';
+    });
+
+    // X-axis: start / middle / end time-of-day.
+    const fmtHourShort = (dt) => {
+      let h = dt.getHours();
+      const ap = h >= 12 ? 'pm' : 'am';
+      h = h % 12; if (h === 0) h = 12;
+      return h + ap;
+    };
+    const midT = minT + spanT / 2;
+    const xTicks = [
+      { t: minT, anchor: 'start' },
+      { t: midT, anchor: 'middle' },
+      { t: maxT, anchor: 'end' },
+    ];
+    xTicks.forEach((tick) => {
+      const xx = x(tick.t).toFixed(1);
+      axisHtml += '<text class="grm-hr-axis-label" x="' + xx + '" y="' + (H - 2) + '" text-anchor="' + tick.anchor + '">' + fmtHourShort(new Date(tick.t)) + '</text>';
+    });
 
     svg.innerHTML =
       '<path class="grm-hr-area" d="' + areaPath + '"/>' +
-      '<path class="grm-hr-line" d="' + linePath + '"/>';
+      '<path class="grm-hr-line" d="' + linePath + '"/>' +
+      axisHtml;
   }
 
   // ============================================================
