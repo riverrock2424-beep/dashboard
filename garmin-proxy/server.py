@@ -39,7 +39,8 @@ load_dotenv()
 
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 PORT = int(os.environ.get("PORT", 8734))
 TOKEN_STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".garmin_session")
 
@@ -270,11 +271,11 @@ def garmin_data():
 @app.route("/ai-summary", methods=["POST"])
 def ai_summary():
     """Turns today's task list into a short, natural-language summary for
-    main.html's Today Summary card. Runs server-side so the Anthropic API
-    key never has to live in browser JS (unlike the old client-side Polish
-    button, which never actually got a key wired in)."""
-    if not ANTHROPIC_API_KEY:
-        return jsonify({"error": "Set ANTHROPIC_API_KEY in garmin-proxy/.env first."}), 500
+    main.html's Today Summary card. Runs server-side so the Gemini API key
+    never has to live in browser JS. Uses Google's free-tier Gemini API
+    (aistudio.google.com) rather than a paid provider."""
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Set GEMINI_API_KEY in garmin-proxy/.env first."}), 500
 
     data = request.get_json(silent=True) or {}
     # Cap both length and count so a runaway task list can't blow up the
@@ -294,30 +295,29 @@ def ai_summary():
     )
 
     body = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 200,
-        "messages": [{"role": "user", "content": prompt}],
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 200},
     }).encode("utf-8")
 
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        + GEMINI_MODEL + ":generateContent?key=" + GEMINI_API_KEY
+    )
     req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
+        url,
         data=body,
-        headers={
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-        },
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        text = result["content"][0]["text"].strip()
+        text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
         return jsonify({"summary": text})
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
-        print(f"[garmin-proxy] Anthropic API error {e.code}: {detail}")
-        return jsonify({"error": "Anthropic API error " + str(e.code)}), 502
+        print(f"[garmin-proxy] Gemini API error {e.code}: {detail}")
+        return jsonify({"error": "Gemini API error " + str(e.code)}), 502
     except Exception as e:
         print(f"[garmin-proxy] ai-summary failed: {e}")
         return jsonify({"error": str(e)}), 500
