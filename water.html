@@ -371,6 +371,8 @@ html, body {
   font-size: 11px; color: var(--text-3); font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
 }
+.field-note { font-size: 11px; color: var(--text-3); margin-top: 4px; line-height: 1.4; font-style: italic; }
+.field input:disabled { opacity: 0.55; cursor: not-allowed; }
 .field input[type="number"], .field input[type="text"], .field select {
   background: rgba(0,0,0,0.28);
   border: 1px solid var(--border);
@@ -589,6 +591,7 @@ html, body {
         <div class="field">
           <label>Weight</label>
           <input type="number" id="setWeight" step="0.5" min="20" max="300">
+          <div class="field-note" id="setWeightNote" style="display:none">Synced from Gym's weight tracker — log a weigh-in there to update this.</div>
         </div>
         <div class="field">
           <label>Weight unit</label>
@@ -615,6 +618,18 @@ html, body {
       <div class="field">
         <label>Activity (training hours per week)</label>
         <input type="number" id="setActivity" min="0" max="40" step="0.5">
+        <div class="field-note" id="setActivityNote" style="display:none">Synced from Gym — counts "Mark workout done" days this week (~1h/session assumed).</div>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <h4>Weather</h4>
+      <div class="field">
+        <div id="weatherStatus" style="font-size:13px;color:var(--text-2)">Checking local weather&hellip;</div>
+        <button class="btn-secondary" id="weatherRefreshBtn" type="button" style="margin-top:8px">Refresh weather</button>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.4">
+          Hot weather adds to your target. Uses your browser's location (never leaves your device except to fetch the forecast) via Open-Meteo — no account or API key needed.
+        </div>
       </div>
     </div>
 
@@ -795,27 +810,122 @@ html, body {
   }
 
   // ============================================================
+  // GYM INTEGRATION — gym.html already tracks bodyweight (weigh-ins)
+  // and actual training days. Reuse that instead of asking for the
+  // same numbers again here. Reads gym.html's own localStorage keys
+  // directly (same browser/origin) — only populated once gym.html has
+  // been opened at least once on this device, since that's what pulls
+  // its cloud-synced data down locally.
+  // ============================================================
+  function readGymWeightKg() {
+    try {
+      const entries = JSON.parse(localStorage.getItem('po_coach_weights'));
+      if (!Array.isArray(entries) || !entries.length) return null;
+      entries.sort((a, b) => (a.dateKey || '').localeCompare(b.dateKey || ''));
+      const last = entries[entries.length - 1];
+      if (!last || last.weight == null) return null;
+      const coach = JSON.parse(localStorage.getItem('po_coach_v1')) || {};
+      return coach.units === 'lb' ? last.weight / 2.20462 : last.weight;
+    } catch (e) { return null; }
+  }
+  function readGymActivityHrsPerWeek() {
+    try {
+      const doneDays = JSON.parse(localStorage.getItem('po_coach_workout_done'));
+      if (!doneDays || typeof doneDays !== 'object') return null;
+      let sessions = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        if (doneDays[dateKey(d)]) sessions++;
+      }
+      // gym.html doesn't log session length, so this assumes ~1h/session —
+      // a reasonable average gym visit, not an exact figure.
+      return sessions;
+    } catch (e) { return null; }
+  }
+
+  // ============================================================
+  // WEATHER — hot weather raises fluid needs. Uses the browser's own
+  // geolocation + Open-Meteo (free, no API key/account) for current
+  // temperature, cached for 45 min so we're not re-fetching constantly.
+  // ============================================================
+  const WEATHER_CACHE_KEY = 'po_water_weather_v1';
+  const WEATHER_MAX_AGE_MS = 45 * 60 * 1000;
+  let weatherState = (function () {
+    try { return JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY)) || null; } catch (e) { return null; }
+  })();
+
+  function weatherExtraMl(tempC) {
+    if (tempC == null || tempC <= 20) return 0;
+    // Heuristic, not a clinical figure: +40ml/day per °C above 20, capped at 1000ml.
+    return Math.min(1000, (tempC - 20) * 40);
+  }
+
+  function refreshWeather(force) {
+    const status = $('weatherStatus');
+    const fresh = weatherState && weatherState.tempC != null && (Date.now() - weatherState.fetchedAt) < WEATHER_MAX_AGE_MS;
+    if (fresh && !force) {
+      if (status) status.textContent = Math.round(weatherState.tempC) + '°C right now — factored into your target.';
+      return;
+    }
+    if (!navigator.geolocation) {
+      if (status) status.textContent = 'Location not available in this browser — weather isn\'t factored in.';
+      return;
+    }
+    if (status) status.textContent = 'Checking local weather…';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=' + latitude + '&longitude=' + longitude + '&current=temperature_2m')
+          .then((res) => res.json())
+          .then((data) => {
+            const tempC = data && data.current ? data.current.temperature_2m : null;
+            if (tempC == null) throw new Error('no temperature in response');
+            weatherState = { tempC, fetchedAt: Date.now() };
+            try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(weatherState)); } catch (e) {}
+            if (status) status.textContent = Math.round(tempC) + '°C right now — factored into your target.';
+            renderWater();
+          })
+          .catch(() => { if (status) status.textContent = 'Could not reach the weather service — try again later.'; });
+      },
+      () => { if (status) status.textContent = 'Location permission denied — weather isn\'t factored in.'; },
+      { timeout: 8000, maximumAge: WEATHER_MAX_AGE_MS }
+    );
+  }
+
+  // ============================================================
   // CALCULATOR — daily water target in ml
   //
   //   base_ml    = weight_kg × 35 ml      (NAM/IOM standard)
   //   exercise   = activity_hrs/wk ÷ 7 × 500 ml/day   (≈500 ml/hr training)
   //   caffeine   = max(0, caffeineMg − 200) × 1.5 ml  (mild diuresis)
   //   substances = sum of extraMl for each added med/stim
+  //   weather    = extra ml on hot days (see weatherExtraMl)
   //   adjustments: +200 ml male, +100 ml age 50+
+  //
+  //   Weight and activity prefer live gym.html data over the manually
+  //   entered profile fields, when gym.html has any — see readGymWeightKg
+  //   / readGymActivityHrsPerWeek above.
   // ============================================================
   function computeTargetMl() {
     const p = state.profile;
-    const wKg = state.weightUnit === 'lb' ? p.weightKg / 2.20462 : p.weightKg;
+    const gymWeightKg = readGymWeightKg();
+    const gymActivity = readGymActivityHrsPerWeek();
+    const wKg = gymWeightKg != null ? gymWeightKg : (state.weightUnit === 'lb' ? p.weightKg / 2.20462 : p.weightKg);
+    const activityHrs = gymActivity != null ? gymActivity : (p.activityHrsPerWeek || 0);
     const base = wKg * 35;
-    const exercise = (p.activityHrsPerWeek || 0) / 7 * 500;
+    const exercise = activityHrs / 7 * 500;
     const caffeine = Math.max(0, (state.caffeineMgPerDay || 0) - 200) * 1.5;
     const subs = (state.substances || []).reduce((s, x) => s + subExtraMl(x), 0);
+    const weather = weatherExtraMl(weatherState ? weatherState.tempC : null);
     let adjust = 0;
     if (p.sex === 'm') adjust += 200;
     if ((p.age || 0) >= 50) adjust += 100;
     return {
-      base, exercise, caffeine, subs, adjust,
-      total: base + exercise + caffeine + subs + adjust
+      base, exercise, caffeine, subs, weather, adjust,
+      usingGymWeight: gymWeightKg != null,
+      usingGymActivity: gymActivity != null,
+      total: base + exercise + caffeine + subs + weather + adjust
     };
   }
 
@@ -881,16 +991,20 @@ html, body {
   function renderWhy(calc) {
     const wrap = $('whyBody');
     const u = state.weightUnit;
-    const wDisp = u === 'lb' ? (state.profile.weightKg).toFixed(0) : state.profile.weightKg.toFixed(0);
+    const wDisp = calc.usingGymWeight ? 'from Gym' : (state.profile.weightKg.toFixed(0) + ' ' + u);
     let html = '';
-    html += '<div class="why-row"><span class="why-label">Base (' + wDisp + ' ' + u + ' × 35 ml)</span><span class="why-val">' + fmtMl(calc.base) + '</span></div>';
-    if (calc.exercise > 0)
-      html += '<div class="why-row"><span class="why-label">+ Exercise (' + state.profile.activityHrsPerWeek + ' h/wk)</span><span class="why-val">+ ' + fmtMl(calc.exercise) + '</span></div>';
+    html += '<div class="why-row"><span class="why-label">Base (' + wDisp + ' × 35 ml)</span><span class="why-val">' + fmtMl(calc.base) + '</span></div>';
+    if (calc.exercise > 0) {
+      const exLabel = calc.usingGymActivity ? 'from Gym, this week' : (state.profile.activityHrsPerWeek + ' h/wk');
+      html += '<div class="why-row"><span class="why-label">+ Exercise (' + exLabel + ')</span><span class="why-val">+ ' + fmtMl(calc.exercise) + '</span></div>';
+    }
     if (calc.caffeine > 0)
       html += '<div class="why-row"><span class="why-label">+ Caffeine (' + state.caffeineMgPerDay + ' mg/day)</span><span class="why-val">+ ' + fmtMl(calc.caffeine) + '</span></div>';
     (state.substances || []).forEach(s => {
       html += '<div class="why-row"><span class="why-label">+ ' + escape(s.name) + ' (' + escape(subDoseLabel(s)) + ')</span><span class="why-val">+ ' + fmtMl(subExtraMl(s)) + '</span></div>';
     });
+    if (calc.weather > 0)
+      html += '<div class="why-row"><span class="why-label">+ Hot weather (' + Math.round(weatherState.tempC) + '°C)</span><span class="why-val">+ ' + fmtMl(calc.weather) + '</span></div>';
     if (calc.adjust > 0)
       html += '<div class="why-row"><span class="why-label">+ Sex / age adjustment</span><span class="why-val">+ ' + fmtMl(calc.adjust) + '</span></div>';
     html += '<div class="why-row total"><span class="why-label">Daily target</span><span class="why-val">' + fmtMl(calc.total) + '</span></div>';
@@ -980,15 +1094,35 @@ html, body {
   // SETTINGS
   // ============================================================
   function renderSettings() {
-    $('setWeight').value = state.profile.weightKg;
+    const gymWeightKg = readGymWeightKg();
+    const gymActivity = readGymActivityHrsPerWeek();
+
+    if (gymWeightKg != null) {
+      $('setWeight').value = (state.weightUnit === 'lb' ? gymWeightKg * 2.20462 : gymWeightKg).toFixed(1);
+    } else {
+      $('setWeight').value = state.profile.weightKg;
+    }
+    $('setWeight').disabled = gymWeightKg != null;
+    $('setWeightNote').style.display = gymWeightKg != null ? '' : 'none';
+    $('setWeightUnit').querySelectorAll('button').forEach(b => { b.disabled = gymWeightKg != null; });
+
     $('setAge').value = state.profile.age;
-    $('setActivity').value = state.profile.activityHrsPerWeek;
+
+    if (gymActivity != null) {
+      $('setActivity').value = gymActivity;
+    } else {
+      $('setActivity').value = state.profile.activityHrsPerWeek;
+    }
+    $('setActivity').disabled = gymActivity != null;
+    $('setActivityNote').style.display = gymActivity != null ? '' : 'none';
+
     $('setCaffeine').value = state.caffeineMgPerDay;
     $('setMlIncrement').value = state.mlIncrement;
 
     setSegActive('setWeightUnit', state.weightUnit);
     setSegActive('setSex', state.profile.sex);
 
+    refreshWeather(false);
     renderSubsList();
   }
   function setSegActive(segId, value) {
@@ -1110,6 +1244,7 @@ html, body {
     $('setModalBg').classList.add('show');
   });
   $('setClose').addEventListener('click', () => $('setModalBg').classList.remove('show'));
+  $('weatherRefreshBtn').addEventListener('click', () => refreshWeather(true));
 
   // Export / import / reset
   $('setExport').addEventListener('click', () => {
@@ -1147,6 +1282,7 @@ html, body {
 
   // BOOT
   renderAll();
+  refreshWeather(false);
 })();
 </script>
 <style>
