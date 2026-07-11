@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="lock.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Home</title>
@@ -445,6 +446,61 @@
     .dayring-ring-box { width: 144px; height: 144px; }
     .dayring-percent { font-size: 32px; }
     .dayring-status { font-size: 13px; }
+  }
+
+  /* ---------- Component 3.5: Today Summary ---------- */
+
+  #todaySummaryCard { margin-bottom: 18px; }
+
+  .gm-summary-cols {
+    display: flex;
+    align-items: stretch;
+  }
+  .gm-summary-col { flex: 1; min-width: 0; }
+  .gm-summary-divider {
+    width: 1px;
+    background: rgba(255,255,255,0.08);
+    margin: 0 18px;
+    flex-shrink: 0;
+  }
+  .gm-summary-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-tertiary);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .gm-summary-count {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .gm-summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .gm-summary-item {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gm-summary-more, .gm-summary-empty {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-style: italic;
+  }
+
+  @media (max-width: 480px) {
+    .gm-summary-count { font-size: 24px; }
+    .gm-summary-divider { margin: 0 12px; }
   }
 
   /* ---------- Component 4: To Do List ---------- */
@@ -991,6 +1047,22 @@
     </div>
   </div>
 
+  <div class="card gm-card" id="todaySummaryCard">
+    <div class="gm-summary-cols">
+      <div class="gm-summary-col">
+        <div class="gm-summary-label">Left today</div>
+        <div class="gm-summary-count" id="summaryLeftCount">0</div>
+        <div class="gm-summary-list" id="summaryLeftList"></div>
+      </div>
+      <div class="gm-summary-divider"></div>
+      <div class="gm-summary-col">
+        <div class="gm-summary-label">Done today</div>
+        <div class="gm-summary-count" id="summaryDoneCount">0</div>
+        <div class="gm-summary-list" id="summaryDoneList"></div>
+      </div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-title">Tasks</div>
 
@@ -1103,7 +1175,7 @@
 
 <div class="tabbar">
   <div class="tabbar-inner">
-    <a href="index.html" class="tab" aria-current="page">
+    <a href="main.html" class="tab" aria-current="page">
       <span class="tab-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
       Home
     </a>
@@ -1385,6 +1457,44 @@
     document.getElementById('todayCard').classList.toggle('gm-all-done', total > 0 && done === total);
     document.getElementById('gmPushBtn').style.display = goals.some(function (g) { return !g.done; }) ? 'block' : 'none';
     document.getElementById('todayLabel').textContent = 'Today — ' + formatDate(getActiveDateString());
+
+    renderTodaySummary();
+  }
+
+  // ===== Today Summary — a quick glance at what's left vs. already done,
+  // shown above the full Tasks section. Reuses Today's own goals list, so
+  // it always matches whatever renderTodayHeader just computed. =====
+  function fillSummaryList(elId, items, emptyText) {
+    const el = document.getElementById(elId);
+    el.innerHTML = '';
+    if (!items.length) {
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'gm-summary-empty';
+      emptyEl.textContent = emptyText;
+      el.appendChild(emptyEl);
+      return;
+    }
+    items.slice(0, 3).forEach(function (g) {
+      const item = document.createElement('div');
+      item.className = 'gm-summary-item';
+      item.textContent = g.text;
+      el.appendChild(item);
+    });
+    if (items.length > 3) {
+      const more = document.createElement('div');
+      more.className = 'gm-summary-more';
+      more.textContent = '+' + (items.length - 3) + ' more';
+      el.appendChild(more);
+    }
+  }
+  function renderTodaySummary() {
+    const goals = getTodayGoals();
+    const left = goals.filter(function (g) { return !g.done; });
+    const done = goals.filter(function (g) { return g.done; });
+    document.getElementById('summaryLeftCount').textContent = left.length;
+    document.getElementById('summaryDoneCount').textContent = done.length;
+    fillSummaryList('summaryLeftList', left, 'Nothing left — nice.');
+    fillSummaryList('summaryDoneList', done, 'Nothing yet today.');
   }
 
   function renderStreak() {

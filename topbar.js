@@ -179,7 +179,7 @@ body.topbar-modal-open {
   // -------- HTML --------
   const html = `
 <header class="topbar" id="topbar" role="navigation" aria-label="Quick stats">
-  <a href="index.html" class="topbar-pill" id="topbarGoals">
+  <a href="main.html" class="topbar-pill" id="topbarGoals">
     <span class="topbar-pill-dot"></span>
     <span class="topbar-pill-label">TASKS</span>
     <span class="topbar-pill-count" id="topbarGoalsCount">0/0</span>
