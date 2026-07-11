@@ -192,11 +192,30 @@
   .goal-ticker-status[data-status="done"] { color: var(--success); }
   .goal-ticker-status[data-status="pending"] { color: var(--text-tertiary); }
 
-  .goal-ticker-text {
+  .goal-ticker-text-wrap {
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
+    position: relative;
+    height: 100%;
+  }
+
+  .goal-ticker-text {
+    display: inline-block;
+    white-space: nowrap;
+    will-change: transform;
+  }
+
+  /* Only text too long to fit gets the marquee crawl — short text just
+     sits still, no pointless scrolling. Delay lets the enter transition
+     finish first so the two animations don't fight. */
+  .goal-ticker-text.is-scrolling {
+    animation: dash-ticker-scroll var(--scroll-duration, 4s) linear 0.6s 1 forwards;
+  }
+
+  @keyframes dash-ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(var(--scroll-distance, 0)); }
   }
 
   .goal-ticker-meta {
@@ -819,11 +838,11 @@
   <div class="ticker-row">
     <div class="goal-ticker" id="goalTicker" aria-live="polite" aria-atomic="true">
       <div class="goal-ticker-led"><span class="goal-ticker-led-dot"></span></div>
-      <div class="goal-ticker-label">GOALS</div>
+      <div class="goal-ticker-label">TASKS</div>
       <div class="goal-ticker-stage" id="goalTickerStage">
         <div class="goal-ticker-row">
           <span class="goal-ticker-status" data-status="">&middot;</span>
-          <span class="goal-ticker-text">Loading&hellip;</span>
+          <span class="goal-ticker-text-wrap"><span class="goal-ticker-text">Loading&hellip;</span></span>
         </div>
       </div>
       <div class="goal-ticker-meta" id="goalTickerMeta">0/0</div>
@@ -897,7 +916,7 @@
       <div class="gm-card-header">
         <div>
           <div class="gm-eyebrow">Upcoming</div>
-          <div class="gm-tomorrow-sub">Scheduled for a later day &mdash; locked until that day arrives.</div>
+          <div class="gm-tomorrow-sub">Scheduled for a later day &mdash; can be checked off early.</div>
         </div>
         <div class="gm-tomorrow-count" id="gmUpcomingCount">0 planned</div>
       </div>
@@ -1174,7 +1193,7 @@
     });
   }
 
-  function buildGoalRow(goal, idx, key, readOnly, reload, lockTooltip) {
+  function buildGoalRow(goal, idx, key, reload) {
     const li = document.createElement('li');
     li.className = 'goal-row';
     if (goal.done) li.classList.add('is-done');
@@ -1190,10 +1209,6 @@
     cb.type = 'checkbox';
     cb.className = 'goal-checkbox';
     cb.checked = !!goal.done;
-    if (readOnly) {
-      cb.disabled = true;
-      cb.title = lockTooltip || 'Activates at 6 AM tomorrow';
-    }
     cb.addEventListener('change', function () {
       const fresh = storeGet(key) || [];
       if (!fresh[idx]) return;
@@ -1218,7 +1233,6 @@
     queueBtn.type = 'button';
     queueBtn.className = 'gm-queue-btn' + (goal.queued ? ' is-active' : '');
     queueBtn.textContent = '⚡';
-    if (readOnly) queueBtn.disabled = true;
     queueBtn.addEventListener('click', function () {
       const fresh = storeGet(key) || [];
       if (!fresh[idx]) return;
@@ -1246,7 +1260,7 @@
     return li;
   }
 
-  function renderListInto(goals, listEl, emptyEl, key, readOnly) {
+  function renderListInto(goals, listEl, emptyEl, key) {
     listEl.innerHTML = '';
     emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
 
@@ -1255,7 +1269,7 @@
     const visible = (goals.length > 5 && !showAll) ? goals.slice(0, 5) : goals;
 
     visible.forEach(function (g, i) {
-      listEl.appendChild(buildGoalRow(g, i, key, readOnly, reload));
+      listEl.appendChild(buildGoalRow(g, i, key, reload));
     });
 
     if (goals.length > 5) {
@@ -1264,7 +1278,7 @@
       toggle.textContent = showAll ? 'Show less ▴' : ('Show ' + (goals.length - 5) + ' more ▾');
       toggle.addEventListener('click', function () {
         listEl.dataset.showAll = showAll ? 'false' : 'true';
-        renderListInto(goals, listEl, emptyEl, key, readOnly);
+        renderListInto(goals, listEl, emptyEl, key);
       });
       listEl.appendChild(toggle);
     }
@@ -1274,14 +1288,15 @@
 
   function loadToday() {
     const key = todayKey();
-    renderListInto(storeGet(key) || [], document.getElementById('goalList'), document.getElementById('emptyState'), key, false);
+    renderListInto(storeGet(key) || [], document.getElementById('goalList'), document.getElementById('emptyState'), key);
   }
 
   // ===== Upcoming — any task scheduled for a date after today, grouped by
-  // its due date. Each date's own goals:YYYY-MM-DD bucket is exactly the
-  // one that becomes "Today" automatically once that date arrives, so no
-  // migration step is needed — this just makes future buckets visible and
-  // editable ahead of time instead of leaving them invisible until then.
+  // its due date and fully interactive (checkable, editable, deletable)
+  // ahead of time. Each date's own goals:YYYY-MM-DD bucket is exactly the
+  // one that becomes "Today" automatically once that date arrives, so
+  // nothing needs to migrate — completing one early just carries its done
+  // state forward to when that day rolls around.
   // =====
 
   function getUpcomingDates() {
@@ -1316,7 +1331,7 @@
       const list = document.createElement('ul');
       list.className = 'goal-list gm-list';
       goals.forEach(function (g, i) {
-        list.appendChild(buildGoalRow(g, i, key, true, loadUpcoming, 'Activates on ' + formatDate(dateStr)));
+        list.appendChild(buildGoalRow(g, i, key, loadUpcoming));
       });
       group.appendChild(list);
 
@@ -1439,8 +1454,10 @@
   // ===== Goal Ticker =====
 
   let tickerCycleIdx = 0;
-  let tickerInterval = null;
+  let tickerTimer = null;
   let tickerFirstRender = true;
+  const TICKER_MIN_DWELL_MS = 5000;
+  const TICKER_SCROLL_PX_PER_SEC = 55;
 
   function buildTickerItems() {
     const goals = getTodayGoals();
@@ -1465,7 +1482,14 @@
     return '·';
   }
 
+  function scheduleNextTick(delay) {
+    if (tickerTimer) clearTimeout(tickerTimer);
+    tickerTimer = setTimeout(tickerTick, delay);
+  }
+
   function tickerTick() {
+    if (tickerTimer) { clearTimeout(tickerTimer); tickerTimer = null; }
+
     const built = buildTickerItems();
     const items = built.items;
     if (tickerCycleIdx >= items.length) tickerCycleIdx = 0;
@@ -1483,10 +1507,13 @@
     statusSpan.textContent = tickerGlyph(item.status);
     newRow.appendChild(statusSpan);
 
+    const textWrap = document.createElement('span');
+    textWrap.className = 'goal-ticker-text-wrap';
     const textSpan = document.createElement('span');
     textSpan.className = 'goal-ticker-text';
     textSpan.textContent = item.text;
-    newRow.appendChild(textSpan);
+    textWrap.appendChild(textSpan);
+    newRow.appendChild(textWrap);
 
     if (existingRow && !tickerFirstRender) {
       existingRow.classList.add('is-leaving');
@@ -1501,12 +1528,27 @@
 
     document.getElementById('goalTickerMeta').textContent = built.done + '/' + built.total;
     tickerCycleIdx++;
+
+    // Text too wide to fit its slot gets a slow left-crawl (like a news
+    // ticker) instead of being cut off with an ellipsis. Only measurable
+    // once laid out, and only worth animating if it actually overflows —
+    // dwell time stretches to let a long crawl finish before advancing.
+    requestAnimationFrame(function () {
+      const overflow = textSpan.scrollWidth - textWrap.clientWidth;
+      let dwell = TICKER_MIN_DWELL_MS;
+      if (overflow > 4) {
+        const scrollMs = (overflow / TICKER_SCROLL_PX_PER_SEC) * 1000;
+        textSpan.style.setProperty('--scroll-distance', '-' + overflow + 'px');
+        textSpan.style.setProperty('--scroll-duration', scrollMs + 'ms');
+        textSpan.classList.add('is-scrolling');
+        dwell = Math.max(TICKER_MIN_DWELL_MS, scrollMs + 1400);
+      }
+      scheduleNextTick(dwell);
+    });
   }
 
   function tickerStart() {
     tickerTick();
-    if (tickerInterval) clearInterval(tickerInterval);
-    tickerInterval = setInterval(tickerTick, 5000);
   }
 
   window.addEventListener('goals-changed', function () {
