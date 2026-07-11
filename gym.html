@@ -515,6 +515,39 @@ img, video, canvas, svg { max-width: 100%; }
   -webkit-tap-highlight-color: transparent;
 }
 .po-ses-set-del:hover { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: var(--bad, #f87171); }
+.po-ses-extra-row {
+  display: flex; align-items: center; gap: 6px;
+  margin: -2px 0 4px 34px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.02);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+.po-ses-extra-row.is-done { border-style: solid; background: rgba(110,231,183,0.08); border-color: rgba(110,231,183,0.25); }
+.po-ses-extra-label { font-size: 11px; color: var(--text-2); flex: 1; min-width: 0; }
+.po-ses-extra-row.is-done .po-ses-extra-label { color: var(--good); font-weight: 600; }
+.po-ses-extra-row input {
+  width: 52px; flex-shrink: 0;
+  background: rgba(0,0,0,0.28); border: 1px solid var(--border);
+  color: var(--text-1); font-family: inherit; font-size: 12px; font-weight: 600;
+  text-align: center; padding: 5px 2px; border-radius: 7px; outline: none;
+  -moz-appearance: textfield;
+}
+.po-ses-extra-row input::-webkit-outer-spin-button,
+.po-ses-extra-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.po-ses-extra-add {
+  flex-shrink: 0; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.06); color: var(--text-1);
+  font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.po-ses-extra-add:hover { background: rgba(255,255,255,0.1); }
+.po-ses-extra-del {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; border: none;
+  background: transparent; color: var(--text-3); font-size: 14px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.po-ses-extra-del:hover { color: var(--bad, #f87171); }
 .po-hidden-hint {
   font-size: 12px; color: var(--text-3); margin-bottom: 8px;
 }
@@ -1725,6 +1758,16 @@ img, video, canvas, svg { max-width: 100%; }
       </div>
     </div>
     <div class="po-field">
+      <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Set style</label>
+      <div class="po-modal-seg" id="exSetStyleSeg">
+        <button type="button" data-style="none">None</button>
+        <button type="button" data-style="myoreps">Myo-reps</button>
+        <button type="button" data-style="lengthened">Lengthened</button>
+        <button type="button" data-style="dropset">Drop set</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.4" id="exSetStyleHint"></div>
+    </div>
+    <div class="po-field">
       <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Replacement exercises</label>
       <div style="font-size:11px;color:var(--text-3);margin:-4px 0 8px;line-height:1.4;">
         Only these show up when you tap Swap on this exercise (e.g. a similar curl variation, not a leg press). Leave empty to allow swapping with anything.
@@ -1944,6 +1987,7 @@ img, video, canvas, svg { max-width: 100%; }
     s.exercises.forEach(e => {
       if (e.targetSets == null) e.targetSets = 3;
       if (e.unilateral == null) e.unilateral = false;
+      if (e.setStyle == null) e.setStyle = 'none';
       delete e.gym; // gym concept removed — single-gym users don't need it
     });
     s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};
@@ -2019,10 +2063,39 @@ img, video, canvas, svg { max-width: 100%; }
   }
   function logVolume(log) {
     const reps = log.unilateral ? (log.repsL || 0) + (log.repsR || 0) : (log.reps || 0);
-    return (log.weight || 0) * reps;
+    let vol = (log.weight || 0) * reps;
+    // Myo-reps/lengthened-partial extras don't track their own weight —
+    // they're done at the same weight as the main set, unlike drop sets.
+    if (log.extra) {
+      const extraWeight = log.extra.weight != null ? log.extra.weight : log.weight;
+      vol += (extraWeight || 0) * (log.extra.reps || 0);
+    }
+    return vol;
   }
   function logRepsDisplay(log) {
     return log.unilateral ? ((log.repsL || 0) + 'L / ' + (log.repsR || 0) + 'R') : String(log.reps || 0);
+  }
+
+  // ---- Special set-style extensions ---------------------------------
+  // An exercise can be flagged so its logged sets offer one optional
+  // extra-intensity add-on after the normal working reps are done:
+  //   myoreps    — rest ~15-20s, then squeeze out a short cluster of a
+  //                few more reps at the same weight (rest-pause style).
+  //   lengthened — keep going with partial reps in the stretched/bottom
+  //                position only, same weight, after failing full-ROM.
+  //   dropset    — immediately drop the weight ~10-30% and keep repping.
+  // Stored on the log entry as log.extra = { type, weight, reps }.
+  const SET_STYLES = {
+    myoreps:    { label: 'Myo-reps',            short: 'Myo',    needsWeight: false, hint: 'Rest ~15–20s, then squeeze out a few more reps at the same weight.' },
+    lengthened: { label: 'Lengthened partials', short: 'Stretch',needsWeight: false, hint: 'Keep going with partial reps in the stretched position, same weight.' },
+    dropset:    { label: 'Drop set',            short: 'Drop',   needsWeight: true,  hint: 'Drop the weight ~10–30% and keep repping to failure.' }
+  };
+  function extraDisplay(log) {
+    if (!log.extra) return '';
+    const meta = SET_STYLES[log.extra.type];
+    if (!meta) return '';
+    const detail = (meta.needsWeight && log.extra.weight ? log.extra.weight + unit() + ' × ' : '') + log.extra.reps + ' reps';
+    return ' + ' + meta.short + ' ' + detail;
   }
 
   // ---- Today's swap overrides --------------------------------------
@@ -2177,6 +2250,31 @@ img, video, canvas, svg { max-width: 100%; }
       : '<span class="po-accent">' + rx.weight + unit() + '</span> &times; ' + rx.reps + ' reps';
     return head + ' <span class="po-reprange">(' + range + ' range)</span>' + ' &middot; ' + escape(rx.tag);
   }
+  // Renders the optional extra-intensity add-on row under a completed set,
+  // for exercises flagged with a special set style. Empty string if the
+  // exercise has no style configured or the set isn't logged yet.
+  function extraRowHTML(ex, done, i) {
+    if (!done || !ex.setStyle || ex.setStyle === 'none') return '';
+    const meta = SET_STYLES[ex.setStyle];
+    if (!meta) return '';
+    if (done.extra) {
+      const detail = (meta.needsWeight && done.extra.weight ? done.extra.weight + unit() + ' &times; ' : '') + done.extra.reps + ' reps';
+      return '<div class="po-ses-extra-row is-done" data-set="' + i + '">'
+        + '<span class="po-ses-extra-label">' + escape(meta.short) + ': ' + detail + '</span>'
+        + '<button type="button" class="po-ses-extra-del" data-action="delextra" data-set="' + i + '" aria-label="Remove ' + escape(meta.label) + '">&times;</button>'
+        + '</div>';
+    }
+    const suggestedWeight = meta.needsWeight ? roundToStep((done.weight || 0) * 0.8, ex.step || 2.5) : null;
+    const weightInput = meta.needsWeight
+      ? '<input type="number" step="0.5" class="po-ses-extra-w" data-set="' + i + '" value="' + suggestedWeight + '" placeholder="wt">'
+      : '';
+    return '<div class="po-ses-extra-row" data-set="' + i + '">'
+      + '<span class="po-ses-extra-label">+ ' + escape(meta.label) + '</span>'
+      + weightInput
+      + '<input type="number" class="po-ses-extra-r" data-set="' + i + '" placeholder="reps">'
+      + '<button type="button" class="po-ses-extra-add" data-action="logextra" data-set="' + i + '">Add</button>'
+      + '</div>';
+  }
   function renderSession() {
     const list = $('sessionList');
     const noMsg = $('noExMsg');
@@ -2252,6 +2350,7 @@ img, video, canvas, svg { max-width: 100%; }
           + '<button type="button" class="po-ses-set-check" data-action="log" aria-label="' + (done ? 'Untick set' : 'Log set') + '" title="' + (done ? 'Tap to untick' : 'Tap to log') + '">' + (done ? '&#10003;' : '&#43;') + '</button>'
           + delBtn
           + '</div>';
+        setsHtml += extraRowHTML(ex, done, i);
       }
 
       return '<div class="po-ses-card" data-ex="' + ex.id + '" data-original="' + planned.id + '">'
@@ -2327,6 +2426,49 @@ img, video, canvas, svg { max-width: 100%; }
         if (!arr.length) delete state.logs[exId]; else state.logs[exId] = arr;
       }
       removeExtraSet(exId);
+      saveState();
+      renderSession();
+      renderTodaysWorkout();
+      renderPastWorkouts();
+      renderGymCalendar();
+      if (typeof wtRender === 'function') wtRender();
+      return;
+    }
+
+    const logExtraBtn = e.target.closest('[data-action="logextra"]');
+    if (logExtraBtn) {
+      const setIdx = parseInt(logExtraBtn.dataset.set, 10);
+      const row = logExtraBtn.closest('.po-ses-extra-row');
+      const todayLogs = todaysLogsFor(exId);
+      const existing = findSetLog(todayLogs, setIdx);
+      const meta = SET_STYLES[ex.setStyle];
+      if (!existing || !meta) return;
+      const reps = parseInt(row.querySelector('.po-ses-extra-r').value, 10) || 0;
+      if (reps <= 0) { alert('Enter reps.'); return; }
+      const extra = { type: ex.setStyle, reps };
+      if (meta.needsWeight) {
+        const weight = parseFloat((row.querySelector('.po-ses-extra-w') || {}).value) || 0;
+        if (weight <= 0) { alert('Enter a weight.'); return; }
+        extra.weight = weight;
+      }
+      // `existing` is the same object stored inside state.logs[exId] (getLogsFor
+      // only shallow-copies the array), so mutating it directly is safe.
+      existing.extra = extra;
+      saveState();
+      renderSession();
+      renderTodaysWorkout();
+      renderPastWorkouts();
+      renderGymCalendar();
+      if (typeof wtRender === 'function') wtRender();
+      return;
+    }
+
+    const delExtraBtn = e.target.closest('[data-action="delextra"]');
+    if (delExtraBtn) {
+      const setIdx = parseInt(delExtraBtn.dataset.set, 10);
+      const todayLogs = todaysLogsFor(exId);
+      const existing = findSetLog(todayLogs, setIdx);
+      if (existing) delete existing.extra;
       saveState();
       renderSession();
       renderTodaysWorkout();
@@ -2450,7 +2592,7 @@ img, video, canvas, svg { max-width: 100%; }
     wrap.innerHTML = reversed.slice(0, 12).map((l, i) => {
       const d = new Date(l.date);
       const dStr = (d.getMonth() + 1) + '/' + d.getDate();
-      const setStr = ex.bw ? (logRepsDisplay(l) + ' reps') : (l.weight + unit() + ' × ' + logRepsDisplay(l));
+      const setStr = (ex.bw ? (logRepsDisplay(l) + ' reps') : (l.weight + unit() + ' × ' + logRepsDisplay(l))) + extraDisplay(l);
       const realIdx = reversed.length - 1 - i; // since we reversed
       return '<div class="po-hist-row">'
         + '<div class="po-hist-date">' + dStr + '</div>'
@@ -2741,7 +2883,7 @@ img, video, canvas, svg { max-width: 100%; }
       + (doneDays[dk] ? ' · Done' : '');
     $('dayDetailList').innerHTML = sum.perEx.map(e => {
       const setsHtml = e.sets.map((log, i) => {
-        const setStr = e.ex.bw ? (logRepsDisplay(log) + ' reps') : (log.weight + u + ' &times; ' + logRepsDisplay(log));
+        const setStr = (e.ex.bw ? (logRepsDisplay(log) + ' reps') : (log.weight + u + ' &times; ' + logRepsDisplay(log))) + extraDisplay(log);
         return '<div class="po-day-detail-set-row">'
           + '<span class="po-day-detail-set-num">' + (i + 1) + '</span>'
           + '<span>' + setStr + '</span>'
@@ -2934,6 +3076,7 @@ img, video, canvas, svg { max-width: 100%; }
   // ============================================================
   let editingExId = null;
   let modalDay = null;
+  let modalSetStyle = 'none';
   let modalReplacementIds = [];
   function renderModalSegs() {
     $('exDaySeg').innerHTML = state.days.map(d =>
@@ -2947,6 +3090,22 @@ img, video, canvas, svg { max-width: 100%; }
       });
     });
   }
+  function renderSetStyleHint() {
+    const meta = SET_STYLES[modalSetStyle];
+    $('exSetStyleHint').textContent = meta ? meta.hint : 'Just the normal working sets, no extra intensity technique.';
+  }
+  function renderSetStyleSeg() {
+    $('exSetStyleSeg').querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.style === modalSetStyle);
+    });
+    renderSetStyleHint();
+  }
+  $('exSetStyleSeg').querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      modalSetStyle = b.dataset.style;
+      renderSetStyleSeg();
+    });
+  });
   function renderModalReplacements() {
     const others = state.exercises.filter(e => e.id !== editingExId);
     const wrap = $('exReplacements');
@@ -2982,6 +3141,7 @@ img, video, canvas, svg { max-width: 100%; }
       $('exRepMax').value = ex.repMax;
       $('exStep').value = ex.step;
       $('exTargetSets').value = ex.targetSets || 3;
+      modalSetStyle = ex.setStyle || 'none';
       modalReplacementIds = Array.isArray(ex.replacementIds) ? ex.replacementIds.slice() : [];
     } else {
       $('exName').value = '';
@@ -2993,9 +3153,11 @@ img, video, canvas, svg { max-width: 100%; }
       $('exRepMax').value = 8;
       $('exStep').value = 2.5;
       $('exTargetSets').value = 3;
+      modalSetStyle = 'none';
       modalReplacementIds = [];
     }
     renderModalSegs();
+    renderSetStyleSeg();
     renderModalReplacements();
     toggleBwFields();
     $('exModalBg').classList.add('show');
@@ -3024,6 +3186,7 @@ img, video, canvas, svg { max-width: 100%; }
       repMin, repMax,
       step: isBw ? 1 : (parseFloat($('exStep').value) || 2.5),
       targetSets: Math.max(1, parseInt($('exTargetSets').value, 10) || 3),
+      setStyle: SET_STYLES[modalSetStyle] ? modalSetStyle : 'none',
       replacementIds: modalReplacementIds.slice()
     };
     let savedExId;

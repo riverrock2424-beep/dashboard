@@ -1070,10 +1070,10 @@
         </div>
         <div class="gm-header-right">
           <div class="gm-tomorrow-count" id="gmNoDateCount">0 planned</div>
-          <button class="gm-collapse-btn" id="noDateToggle" type="button" aria-expanded="true" aria-label="Toggle someday tasks">&#9662;</button>
+          <button class="gm-collapse-btn" id="noDateToggle" type="button" aria-expanded="false" aria-label="Toggle someday tasks">&#9662;</button>
         </div>
       </div>
-      <div id="noDateBody">
+      <div id="noDateBody" style="display:none">
         <div id="emptyStateNoDate" class="empty-state">Nothing here yet</div>
         <ul id="noDateList" class="goal-list gm-list"></ul>
       </div>
@@ -1908,7 +1908,7 @@
   makeCollapsible('statsToggle', 'statsBody', true);
   makeCollapsible('todayToggle', 'todayBody', true);
   makeCollapsible('upcomingToggle', 'upcomingBody', true);
-  makeCollapsible('noDateToggle', 'noDateBody', true);
+  makeCollapsible('noDateToggle', 'noDateBody', false);
 
   updateDayBar();
   setInterval(updateDayBar, 60 * 1000);
