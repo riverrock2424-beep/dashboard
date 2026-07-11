@@ -451,57 +451,31 @@
   /* ---------- Component 3.5: Today Summary ---------- */
 
   #todaySummaryCard { margin-bottom: 18px; }
+  #todaySummaryCard .gm-card-header { margin-bottom: 10px; align-items: center; }
 
-  .gm-summary-cols {
-    display: flex;
-    align-items: stretch;
-  }
-  .gm-summary-col { flex: 1; min-width: 0; }
-  .gm-summary-divider {
-    width: 1px;
-    background: rgba(255,255,255,0.08);
-    margin: 0 18px;
+  .gm-refresh-btn {
+    width: 28px;
+    height: 28px;
     flex-shrink: 0;
-  }
-  .gm-summary-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
     color: var(--text-tertiary);
-    font-weight: 700;
-    margin-bottom: 6px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.5s ease;
+    -webkit-tap-highlight-color: transparent;
   }
-  .gm-summary-count {
-    font-size: 30px;
-    font-weight: 700;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.02em;
-    line-height: 1;
-    margin-bottom: 10px;
-  }
-  .gm-summary-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .gm-summary-item {
-    font-size: 12px;
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .gm-summary-more, .gm-summary-empty {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    font-style: italic;
-  }
+  .gm-refresh-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+  .gm-refresh-btn.spin { animation: dash-summary-spin 0.6s linear; }
+  @keyframes dash-summary-spin { to { transform: rotate(360deg); } }
 
-  @media (max-width: 480px) {
-    .gm-summary-count { font-size: 24px; }
-    .gm-summary-divider { margin: 0 12px; }
+  .gm-summary-text {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text-secondary);
   }
+  .gm-summary-text.is-loading { color: var(--text-tertiary); font-style: italic; }
 
   /* ---------- Component 4: To Do List ---------- */
 
@@ -1048,19 +1022,11 @@
   </div>
 
   <div class="card gm-card" id="todaySummaryCard">
-    <div class="gm-summary-cols">
-      <div class="gm-summary-col">
-        <div class="gm-summary-label">Left today</div>
-        <div class="gm-summary-count" id="summaryLeftCount">0</div>
-        <div class="gm-summary-list" id="summaryLeftList"></div>
-      </div>
-      <div class="gm-summary-divider"></div>
-      <div class="gm-summary-col">
-        <div class="gm-summary-label">Done today</div>
-        <div class="gm-summary-count" id="summaryDoneCount">0</div>
-        <div class="gm-summary-list" id="summaryDoneList"></div>
-      </div>
+    <div class="gm-card-header">
+      <div class="gm-eyebrow">Today's summary</div>
+      <button class="gm-refresh-btn" id="summaryRefreshBtn" type="button" aria-label="Refresh summary" title="Refresh summary">&#8635;</button>
     </div>
+    <div class="gm-summary-text" id="todaySummaryText">Loading&hellip;</div>
   </div>
 
   <div class="section">
@@ -1461,40 +1427,78 @@
     renderTodaySummary();
   }
 
-  // ===== Today Summary — a quick glance at what's left vs. already done,
-  // shown above the full Tasks section. Reuses Today's own goals list, so
-  // it always matches whatever renderTodayHeader just computed. =====
-  function fillSummaryList(elId, items, emptyText) {
-    const el = document.getElementById(elId);
-    el.innerHTML = '';
-    if (!items.length) {
-      const emptyEl = document.createElement('div');
-      emptyEl.className = 'gm-summary-empty';
-      emptyEl.textContent = emptyText;
-      el.appendChild(emptyEl);
-      return;
-    }
-    items.slice(0, 3).forEach(function (g) {
-      const item = document.createElement('div');
-      item.className = 'gm-summary-item';
-      item.textContent = g.text;
-      el.appendChild(item);
-    });
-    if (items.length > 3) {
-      const more = document.createElement('div');
-      more.className = 'gm-summary-more';
-      more.textContent = '+' + (items.length - 3) + ' more';
-      el.appendChild(more);
-    }
+  // ===== Today Summary — an AI-written sentence or two covering what's
+  // left vs. already done today, shown above the full Tasks section. Calls
+  // the same garmin-proxy backend health.html already talks to (a small
+  // /ai-summary route there keeps the Anthropic key server-side, never in
+  // browser JS). Falls back to a plain templated line if the backend isn't
+  // reachable or has no key configured, so the card never just breaks.
+  const AI_SUMMARY_DEFAULT_PROXY = 'https://dashboard-a8fp.onrender.com';
+  const AI_SUMMARY_CACHE_KEY = 'aiSummaryCache_v1';
+
+  function aiSummaryProxyUrl() {
+    return (localStorage.getItem('garmin_cfg_proxyUrl') || AI_SUMMARY_DEFAULT_PROXY).replace(/\/$/, '');
   }
-  function renderTodaySummary() {
+  function taskTextSignature(left, done) {
+    return JSON.stringify([left.map(function (g) { return g.text; }), done.map(function (g) { return g.text; })]);
+  }
+  function fallbackSummaryText(left, done) {
+    if (!left.length && !done.length) return 'No tasks yet today — add one below to get started.';
+    const parts = [];
+    if (left.length) parts.push(left.length + (left.length === 1 ? ' task left today' : ' tasks left today'));
+    if (done.length) parts.push(done.length + ' done so far');
+    return parts.join(', ') + '.';
+  }
+  function renderTodaySummary(forceRefresh) {
     const goals = getTodayGoals();
     const left = goals.filter(function (g) { return !g.done; });
     const done = goals.filter(function (g) { return g.done; });
-    document.getElementById('summaryLeftCount').textContent = left.length;
-    document.getElementById('summaryDoneCount').textContent = done.length;
-    fillSummaryList('summaryLeftList', left, 'Nothing left — nice.');
-    fillSummaryList('summaryDoneList', done, 'Nothing yet today.');
+    const sig = taskTextSignature(left, done);
+    const summaryEl = document.getElementById('todaySummaryText');
+    const cache = storeGet(AI_SUMMARY_CACHE_KEY) || {};
+
+    if (!forceRefresh && cache.date === getActiveDateString() && cache.sig === sig && cache.text) {
+      summaryEl.textContent = cache.text;
+      summaryEl.classList.remove('is-loading');
+      return;
+    }
+    if (!left.length && !done.length) {
+      summaryEl.textContent = fallbackSummaryText(left, done);
+      summaryEl.classList.remove('is-loading');
+      storeSet(AI_SUMMARY_CACHE_KEY, { date: getActiveDateString(), sig: sig, text: summaryEl.textContent });
+      return;
+    }
+
+    summaryEl.textContent = 'Thinking…';
+    summaryEl.classList.add('is-loading');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(function () { controller.abort(); }, 12000);
+
+    fetch(aiSummaryProxyUrl() + '/ai-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        left: left.map(function (g) { return g.text; }),
+        done: done.map(function (g) { return g.text; })
+      }),
+      signal: controller.signal
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        clearTimeout(timeout);
+        summaryEl.classList.remove('is-loading');
+        const text = (data && data.summary) ? data.summary : fallbackSummaryText(left, done);
+        summaryEl.textContent = text;
+        storeSet(AI_SUMMARY_CACHE_KEY, { date: getActiveDateString(), sig: sig, text: text });
+      })
+      .catch(function () {
+        clearTimeout(timeout);
+        summaryEl.classList.remove('is-loading');
+        summaryEl.textContent = fallbackSummaryText(left, done);
+        // Don't cache the fallback under this signature — once the proxy's
+        // reachable again, the next change should get a real shot at it.
+      });
   }
 
   function renderStreak() {
@@ -2022,6 +2026,13 @@
 
   updateDayBar();
   setInterval(updateDayBar, 60 * 1000);
+
+  document.getElementById('summaryRefreshBtn').addEventListener('click', function () {
+    const btn = document.getElementById('summaryRefreshBtn');
+    btn.classList.add('spin');
+    setTimeout(function () { btn.classList.remove('spin'); }, 650);
+    renderTodaySummary(true);
+  });
 
   document.getElementById('dayRingEditBtn').addEventListener('click', () => {
     const sched = getSchedule();

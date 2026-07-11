@@ -25,9 +25,12 @@ Garmin account this proxy uses, or run a one-off interactive login first
 """
 
 import os
+import json
 import datetime
+import urllib.request
+import urllib.error
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 import garminconnect
@@ -36,6 +39,7 @@ load_dotenv()
 
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 PORT = int(os.environ.get("PORT", 8734))
 TOKEN_STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".garmin_session")
 
@@ -261,6 +265,62 @@ def garmin_data():
         "updatedAt": datetime.datetime.now().isoformat(),
     }
     return jsonify(payload)
+
+
+@app.route("/ai-summary", methods=["POST"])
+def ai_summary():
+    """Turns today's task list into a short, natural-language summary for
+    main.html's Today Summary card. Runs server-side so the Anthropic API
+    key never has to live in browser JS (unlike the old client-side Polish
+    button, which never actually got a key wired in)."""
+    if not ANTHROPIC_API_KEY:
+        return jsonify({"error": "Set ANTHROPIC_API_KEY in garmin-proxy/.env first."}), 500
+
+    data = request.get_json(silent=True) or {}
+    # Cap both length and count so a runaway task list can't blow up the
+    # prompt — this is a summary card, not a full task dump.
+    left = [str(t)[:200] for t in (data.get("left") or []) if t][:25]
+    done = [str(t)[:200] for t in (data.get("done") or []) if t][:25]
+
+    if not left and not done:
+        return jsonify({"summary": "No tasks yet today — add one to get started."})
+
+    prompt = (
+        "Write a warm, encouraging 2-3 sentence summary of someone's day for a personal "
+        "task dashboard. Second person ('you'), plain prose, no bullet points, no markdown, "
+        "no preamble or labels — just the summary itself.\n\n"
+        + ("Still left to do today: " + "; ".join(left) + ".\n" if left else "Nothing left to do today.\n")
+        + ("Already done today: " + "; ".join(done) + ".\n" if done else "Nothing done yet today.\n")
+    )
+
+    body = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 200,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        text = result["content"][0]["text"].strip()
+        return jsonify({"summary": text})
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        print(f"[garmin-proxy] Anthropic API error {e.code}: {detail}")
+        return jsonify({"error": "Anthropic API error " + str(e.code)}), 502
+    except Exception as e:
+        print(f"[garmin-proxy] ai-summary failed: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
