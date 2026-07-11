@@ -675,6 +675,11 @@
     padding-top: 14px;
     border-top: 1px solid rgba(255,255,255,0.08);
   }
+  .gm-input-wrap-top {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
 
   .goal-input {
     flex: 1;
@@ -713,13 +718,6 @@
   }
   .gm-btn-add:hover { transform: translateY(-1px); filter: brightness(1.05); }
 
-  .gm-btn-polish {
-    background: rgba(255,255,255,0.04);
-    color: var(--text-primary);
-    border: 1px solid rgba(255,255,255,0.10);
-  }
-  .gm-btn-polish:hover { background: rgba(255,255,255,0.08); }
-
   .gm-date-input {
     flex: 0 0 auto;
     padding: 11px 12px;
@@ -748,14 +746,6 @@
     color: var(--text-tertiary);
     margin-bottom: 6px;
   }
-
-  .gm-status {
-    width: 100%;
-    font-size: 11px;
-    color: var(--text-tertiary);
-    min-height: 14px;
-  }
-  .gm-status.is-error { color: var(--danger); }
 
   /* ---------- Bottom tab bar (shared across pages) ---------- */
   .tabbar {
@@ -873,6 +863,14 @@
   <div class="section">
     <div class="section-title">Tasks</div>
 
+    <div class="card gm-card" id="addTaskCard">
+      <div class="goal-input-wrap gm-input-wrap gm-input-wrap-top">
+        <input type="text" id="taskInput" class="goal-input" placeholder="Add a task&hellip;">
+        <input type="date" id="taskDateInput" class="gm-date-input">
+        <button class="gm-btn gm-btn-add" id="taskAddBtn" type="button">+ Add</button>
+      </div>
+    </div>
+
     <div class="card gm-card" id="todayCard">
       <div class="gm-card-header">
         <div>
@@ -890,15 +888,9 @@
         </div>
       </div>
       <div class="gm-bar" id="gmBar"></div>
-      <div id="emptyState" class="empty-state">No tasks for today yet &mdash; add one below.</div>
+      <div id="emptyState" class="empty-state">No tasks for today yet &mdash; add one above.</div>
       <ul id="goalList" class="goal-list gm-list"></ul>
       <button class="gm-push-btn" id="gmPushBtn" type="button" style="display:none;">Push remaining to tomorrow</button>
-      <div class="goal-input-wrap gm-input-wrap">
-        <input type="text" id="goalInput" class="goal-input" placeholder="Add a task for today&hellip;">
-        <button class="gm-btn gm-btn-add" id="goalAddBtn" type="button">+ Add</button>
-        <button class="gm-btn gm-btn-polish" id="goalPolishBtn" type="button">&#10024; Polish</button>
-        <div class="gm-status" id="polishStatus"></div>
-      </div>
     </div>
 
     <div class="card gm-card gm-card-tomorrow" id="upcomingCard">
@@ -911,13 +903,6 @@
       </div>
       <div id="emptyStateUpcoming" class="empty-state">Nothing scheduled yet</div>
       <div id="upcomingGroups"></div>
-      <div class="goal-input-wrap gm-input-wrap">
-        <input type="text" id="upcomingInput" class="goal-input" placeholder="Add a task&hellip;">
-        <input type="date" id="upcomingDateInput" class="gm-date-input">
-        <button class="gm-btn gm-btn-add" id="upcomingAddBtn" type="button">+ Add</button>
-        <button class="gm-btn gm-btn-polish" id="upcomingPolishBtn" type="button">&#10024; Polish</button>
-        <div class="gm-status" id="upcomingStatus"></div>
-      </div>
     </div>
   </div>
 
@@ -953,7 +938,6 @@
   'use strict';
 
   // ===== Config =====
-  const ANTHROPIC_API_KEY = '';
   const WAKE_HOUR = 8;
   const SLEEP_HOUR = 24;
   const RING_R = 52;
@@ -1364,18 +1348,9 @@
     loadUpcoming();
   });
 
-  // ===== Add + Polish =====
+  // ===== Add =====
 
-  function showStatus(el, msg, isError) {
-    el.textContent = msg;
-    el.classList.toggle('is-error', !!isError);
-    setTimeout(function () {
-      el.textContent = '';
-      el.classList.remove('is-error');
-    }, 3500);
-  }
-
-  function makeAddHandlers(input, addBtn, polishBtn, getKey, statusEl, reload) {
+  function makeAddHandler(input, addBtn, getKey, reload) {
     function addGoal(text) {
       const key = getKey();
       const fresh = storeGet(key) || [];
@@ -1396,57 +1371,6 @@
         e.preventDefault();
         addBtn.click();
       }
-    });
-
-    polishBtn.addEventListener('click', function () {
-      const text = input.value.trim();
-      if (!text) return;
-
-      if (!ANTHROPIC_API_KEY) {
-        addGoal(text);
-        input.value = '';
-        reload();
-        showStatus(statusEl, 'Polish needs an Anthropic API key — added as-typed.', false);
-        return;
-      }
-
-      fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: 'Clean up the wording of exactly ONE to-do goal so it reads clearly and concisely. ' +
-              'Return ONLY a JSON array containing exactly one string — the cleaned-up goal text. ' +
-              'No preamble, no markdown code fences, no explanation.\n\nGoal: ' + text
-          }]
-        })
-      })
-        .then(function (resp) {
-          if (!resp.ok) throw new Error('Request failed: ' + resp.status);
-          return resp.json();
-        })
-        .then(function (data) {
-          const raw = data.content && data.content[0] && data.content[0].text;
-          const arr = JSON.parse(raw);
-          const cleaned = (Array.isArray(arr) && arr.length) ? String(arr[0]) : text;
-          addGoal(cleaned);
-          input.value = '';
-          reload();
-        })
-        .catch(function () {
-          addGoal(text);
-          input.value = '';
-          reload();
-          showStatus(statusEl, 'Polish failed — added as-typed.', true);
-        });
     });
   }
 
@@ -1595,36 +1519,25 @@
   checkStreak();
   rollover();
 
-  makeAddHandlers(
-    document.getElementById('goalInput'),
-    document.getElementById('goalAddBtn'),
-    document.getElementById('goalPolishBtn'),
-    todayKey,
-    document.getElementById('polishStatus'),
-    loadToday
-  );
+  // One add control for both Today and Upcoming — the date picker decides
+  // which bucket a task lands in. Defaults to today; picking a later date
+  // schedules it into that date's own goals:YYYY-MM-DD bucket, which is
+  // the same one that becomes "Today" automatically once that day arrives.
+  const taskDateInput = document.getElementById('taskDateInput');
+  taskDateInput.min = getActiveDateString();
+  taskDateInput.value = getActiveDateString();
 
-  // Upcoming's date picker lets a task be scheduled for any future day, not
-  // just tomorrow — falls back to tomorrow's date if nothing's picked yet
-  // or something before tomorrow slipped through (min= should prevent that).
-  function upcomingSelectedKey() {
-    const input = document.getElementById('upcomingDateInput');
-    const minDate = getTomorrowDateString();
-    const dateStr = (input.value && input.value >= minDate) ? input.value : minDate;
+  function taskSelectedKey() {
+    const minDate = getActiveDateString();
+    const dateStr = (taskDateInput.value && taskDateInput.value >= minDate) ? taskDateInput.value : minDate;
     return 'goals:' + dateStr;
   }
 
-  const upcomingDateInput = document.getElementById('upcomingDateInput');
-  upcomingDateInput.min = getTomorrowDateString();
-  upcomingDateInput.value = getTomorrowDateString();
-
-  makeAddHandlers(
-    document.getElementById('upcomingInput'),
-    document.getElementById('upcomingAddBtn'),
-    document.getElementById('upcomingPolishBtn'),
-    upcomingSelectedKey,
-    document.getElementById('upcomingStatus'),
-    loadUpcoming
+  makeAddHandler(
+    document.getElementById('taskInput'),
+    document.getElementById('taskAddBtn'),
+    taskSelectedKey,
+    function () { loadToday(); loadUpcoming(); }
   );
 
   loadToday();
