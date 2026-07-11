@@ -352,11 +352,94 @@
     color: var(--text-secondary);
   }
 
+  .dayring-hours-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   .dayring-hours {
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-tertiary);
   }
+
+  .dayring-edit-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--text-tertiary);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    padding: 3px 10px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .dayring-edit-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  /* ----- Schedule modal ----- */
+  .modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    width: 100%;
+    max-width: 380px;
+    background: #111113;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .modal h3 {
+    margin: 0 0 14px;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .modal-field label {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .modal-field input[type="time"] {
+    padding: 11px 14px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+  }
+  .modal-field input[type="time"]:focus { border-color: rgba(255,255,255,0.3); }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .modal-actions .gm-btn { flex: 1; }
 
   @media (max-width: 480px) {
     .dayring-ring-box { width: 144px; height: 144px; }
@@ -448,11 +531,6 @@
     background: rgba(242,192,99,0.10);
     color: var(--warning);
     border-color: rgba(242,192,99,0.32);
-  }
-
-  .gm-streak-bolt { font-size: 13px; }
-  .gm-streak.gm-streak-active .gm-streak-bolt {
-    filter: drop-shadow(0 0 6px rgba(242,192,99,0.6));
   }
 
   .gm-streak-num {
@@ -754,6 +832,18 @@
     border-color: rgba(255,255,255,0.3);
     background: rgba(255,255,255,0.06);
   }
+  .gm-date-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .gm-no-date-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .gm-no-date-label input { cursor: pointer; }
 
   .gm-upcoming-group { margin-bottom: 14px; }
   .gm-upcoming-group:last-child { margin-bottom: 0; }
@@ -874,7 +964,10 @@
       <div class="dayring-info">
         <div class="dayring-status" id="dayRingStatus">&#128564; Still sleeping</div>
         <div class="dayring-remaining" id="dayRingRemaining">&mdash;</div>
-        <div class="dayring-hours">8:00 AM &mdash; 12:00 AM</div>
+        <div class="dayring-hours-row">
+          <div class="dayring-hours" id="dayRingHours">8:00 AM &mdash; 12:00 AM</div>
+          <button class="dayring-edit-btn" id="dayRingEditBtn" type="button" aria-label="Edit wake/sleep time" title="Edit wake/sleep time">Edit</button>
+        </div>
       </div>
     </div>
   </div>
@@ -886,6 +979,10 @@
       <div class="goal-input-wrap gm-input-wrap gm-input-wrap-top">
         <input type="text" id="taskInput" class="goal-input" placeholder="Add a task&hellip;">
         <input type="date" id="taskDateInput" class="gm-date-input">
+        <label class="gm-no-date-label">
+          <input type="checkbox" id="taskNoDateCheck">
+          No date
+        </label>
         <button class="gm-btn gm-btn-add" id="taskAddBtn" type="button">+ Add</button>
       </div>
     </div>
@@ -901,7 +998,6 @@
           </div>
         </div>
         <div class="gm-streak" id="gmStreak">
-          <span class="gm-streak-bolt">&#9889;</span>
           <span class="gm-streak-num" id="gmStreakNum">0</span>
           <span class="gm-streak-label">day streak</span>
         </div>
@@ -923,8 +1019,39 @@
       <div id="emptyStateUpcoming" class="empty-state">Nothing scheduled yet</div>
       <div id="upcomingGroups"></div>
     </div>
+
+    <div class="card gm-card gm-card-tomorrow" id="noDateCard">
+      <div class="gm-card-header">
+        <div>
+          <div class="gm-eyebrow">Someday</div>
+          <div class="gm-tomorrow-sub">No due date &mdash; do whenever.</div>
+        </div>
+        <div class="gm-tomorrow-count" id="gmNoDateCount">0 planned</div>
+      </div>
+      <div id="emptyStateNoDate" class="empty-state">Nothing here yet</div>
+      <ul id="noDateList" class="goal-list gm-list"></ul>
+    </div>
   </div>
 
+</div>
+
+<!-- Wake / sleep time editor — feeds the Day Ring above -->
+<div class="modal-bg" id="scheduleModalBg">
+  <div class="modal">
+    <h3>Wake &amp; sleep time</h3>
+    <div class="modal-field">
+      <label>Wake up</label>
+      <input type="time" id="wakeTimeInput">
+    </div>
+    <div class="modal-field">
+      <label>Sleep</label>
+      <input type="time" id="sleepTimeInput">
+    </div>
+    <div class="modal-actions">
+      <button class="gm-btn gm-btn-add" id="scheduleCancel" type="button" style="background:rgba(255,255,255,0.04);color:var(--text-primary);border:1px solid rgba(255,255,255,0.10);box-shadow:none;">Cancel</button>
+      <button class="gm-btn gm-btn-add" id="scheduleSave" type="button">Save</button>
+    </div>
+  </div>
 </div>
 
 <div class="tabbar">
@@ -957,8 +1084,8 @@
   'use strict';
 
   // ===== Config =====
-  const WAKE_HOUR = 8;
-  const SLEEP_HOUR = 24;
+  const DEFAULT_WAKE_HOUR = 8;
+  const DEFAULT_SLEEP_HOUR = 24;
   const RING_R = 52;
   const RING_C = 2 * Math.PI * RING_R;
 
@@ -990,6 +1117,43 @@
       if (k && k.indexOf(prefix) === 0) keys.push(k);
     }
     return keys;
+  }
+
+  // ===== Wake / sleep schedule =====
+  // Stored as decimal hours (e.g. 8.5 = 8:30 AM) so the day ring's math
+  // stays simple. A bedtime past midnight (e.g. wake 8, sleep 0:30) is
+  // stored as sleepHour > 24 (24.5) so it still sorts after wake.
+  function getSchedule() {
+    const s = storeGet('daySchedule_v1');
+    if (s && typeof s.wakeHour === 'number' && typeof s.sleepHour === 'number') return s;
+    return { wakeHour: DEFAULT_WAKE_HOUR, sleepHour: DEFAULT_SLEEP_HOUR };
+  }
+
+  function setSchedule(wakeHour, sleepHour) {
+    storeSet('daySchedule_v1', { wakeHour: wakeHour, sleepHour: sleepHour });
+  }
+
+  function timeStrToDecimalHour(t) {
+    const parts = (t || '').split(':').map(Number);
+    if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+    return parts[0] + parts[1] / 60;
+  }
+
+  function decimalHourToTimeStr(h) {
+    const norm = ((h % 24) + 24) % 24;
+    const hh = Math.floor(norm);
+    const mm = Math.round((norm - hh) * 60);
+    return pad2(hh) + ':' + pad2(mm);
+  }
+
+  function fmtHourAmPm(h) {
+    const norm = ((h % 24) + 24) % 24;
+    const hh = Math.floor(norm);
+    const mm = Math.round((norm - hh) * 60);
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    let h12 = hh % 12;
+    if (h12 === 0) h12 = 12;
+    return h12 + ':' + pad2(mm) + ' ' + ampm;
   }
 
   // ===== Date helpers =====
@@ -1040,7 +1204,7 @@
     const activeDate = getActiveDateString();
     const dates = storeListKeys('goals:')
       .map(function (k) { return k.slice('goals:'.length); })
-      .filter(function (d) { return d < activeDate; })
+      .filter(function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(d) && d < activeDate; })
       .filter(function (d) { return !state.lastProcessedDate || d > state.lastProcessedDate; })
       .sort();
 
@@ -1067,7 +1231,7 @@
     const tKey = todayKey();
     storeListKeys('goals:').forEach(function (key) {
       const dateStr = key.slice('goals:'.length);
-      if (dateStr >= activeDate) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || dateStr >= activeDate) return;
       const goals = storeGet(key) || [];
       const undone = goals.filter(function (g) { return !g.done; });
       if (undone.length) {
@@ -1299,13 +1463,33 @@
   // state forward to when that day rolls around.
   // =====
 
+  const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
   function getUpcomingDates() {
     const activeDate = getActiveDateString();
     return storeListKeys('goals:')
       .map(function (k) { return k.slice('goals:'.length); })
-      .filter(function (d) { return d > activeDate; })
+      .filter(function (d) { return DATE_KEY_RE.test(d) && d > activeDate; })
       .filter(function (d) { return (storeGet('goals:' + d) || []).length > 0; })
       .sort();
+  }
+
+  // ===== No-date tasks — "someday" items with nothing to roll over or
+  // schedule against, stored under the fixed key goals:none. =====
+  function noDateKey() { return 'goals:none'; }
+  function getNoDateGoals() { return storeGet(noDateKey()) || []; }
+
+  function loadNoDate() {
+    const key = noDateKey();
+    const goals = getNoDateGoals();
+    const listEl = document.getElementById('noDateList');
+    const emptyEl = document.getElementById('emptyStateNoDate');
+    listEl.innerHTML = '';
+    emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
+    goals.forEach(function (g, i) {
+      listEl.appendChild(buildGoalRow(g, i, key, loadNoDate));
+    });
+    document.getElementById('gmNoDateCount').textContent = goals.length + ' planned';
   }
 
   function loadUpcoming() {
@@ -1403,6 +1587,10 @@
   }
 
   function updateDayBar() {
+    const sched = getSchedule();
+    const WAKE_HOUR = sched.wakeHour;
+    const SLEEP_HOUR = sched.sleepHour;
+
     const now = new Date();
     const hours = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
 
@@ -1412,9 +1600,11 @@
     const clockEl = document.getElementById('dayRingClock');
     const statusEl = document.getElementById('dayRingStatus');
     const remainingEl = document.getElementById('dayRingRemaining');
+    const hoursEl = document.getElementById('dayRingHours');
 
     fillEl.setAttribute('stroke-dasharray', String(RING_C));
     clockEl.textContent = formatClock(now);
+    hoursEl.textContent = fmtHourAmPm(WAKE_HOUR) + ' — ' + fmtHourAmPm(SLEEP_HOUR);
 
     if (hours < WAKE_HOUR) {
       fillEl.setAttribute('stroke-dashoffset', String(RING_C));
@@ -1432,8 +1622,8 @@
 
       let phase, status;
       if (percent < 25) { phase = 'MORNING'; status = '☀️ Morning — fresh start'; }
-      else if (percent < 50) { phase = 'MIDDAY'; status = '⚡ Midday — keep moving'; }
-      else if (percent < 75) { phase = 'AFTERNOON'; status = '\u{1F525} Afternoon — push it'; }
+      else if (percent < 50) { phase = 'MIDDAY'; status = 'Midday — keep moving'; }
+      else if (percent < 75) { phase = 'AFTERNOON'; status = 'Afternoon — push it'; }
       else if (percent < 90) { phase = 'EVENING'; status = '⏳ Evening — wrap up'; }
       else { phase = 'BEDTIME'; status = '\u{1F319} Bedtime soon'; }
       phaseEl.textContent = phase;
@@ -1561,15 +1751,22 @@
   checkStreak();
   rollover();
 
-  // One add control for both Today and Upcoming — the date picker decides
-  // which bucket a task lands in. Defaults to today; picking a later date
-  // schedules it into that date's own goals:YYYY-MM-DD bucket, which is
-  // the same one that becomes "Today" automatically once that day arrives.
+  // One add control for Today, Upcoming, and Someday — the date picker
+  // decides which bucket a task lands in. Defaults to today; picking a
+  // later date schedules it into that date's own goals:YYYY-MM-DD bucket,
+  // which is the same one that becomes "Today" automatically once that
+  // day arrives. Ticking "No date" skips scheduling entirely.
   const taskDateInput = document.getElementById('taskDateInput');
+  const taskNoDateCheck = document.getElementById('taskNoDateCheck');
   taskDateInput.min = getActiveDateString();
   taskDateInput.value = getActiveDateString();
 
+  taskNoDateCheck.addEventListener('change', function () {
+    taskDateInput.disabled = taskNoDateCheck.checked;
+  });
+
   function taskSelectedKey() {
+    if (taskNoDateCheck.checked) return noDateKey();
     const minDate = getActiveDateString();
     const dateStr = (taskDateInput.value && taskDateInput.value >= minDate) ? taskDateInput.value : minDate;
     return 'goals:' + dateStr;
@@ -1579,15 +1776,35 @@
     document.getElementById('taskInput'),
     document.getElementById('taskAddBtn'),
     taskSelectedKey,
-    function () { loadToday(); loadUpcoming(); }
+    function () { loadToday(); loadUpcoming(); loadNoDate(); }
   );
 
   loadToday();
   loadUpcoming();
+  loadNoDate();
   renderStreak();
 
   updateDayBar();
   setInterval(updateDayBar, 60 * 1000);
+
+  document.getElementById('dayRingEditBtn').addEventListener('click', () => {
+    const sched = getSchedule();
+    document.getElementById('wakeTimeInput').value = decimalHourToTimeStr(sched.wakeHour);
+    document.getElementById('sleepTimeInput').value = decimalHourToTimeStr(sched.sleepHour);
+    document.getElementById('scheduleModalBg').classList.add('show');
+  });
+  document.getElementById('scheduleCancel').addEventListener('click', () => {
+    document.getElementById('scheduleModalBg').classList.remove('show');
+  });
+  document.getElementById('scheduleSave').addEventListener('click', () => {
+    const wakeHour = timeStrToDecimalHour(document.getElementById('wakeTimeInput').value);
+    let sleepHour = timeStrToDecimalHour(document.getElementById('sleepTimeInput').value);
+    if (wakeHour == null || sleepHour == null) { alert('Enter both times.'); return; }
+    if (sleepHour <= wakeHour) sleepHour += 24; // bedtime past midnight
+    setSchedule(wakeHour, sleepHour);
+    document.getElementById('scheduleModalBg').classList.remove('show');
+    updateDayBar();
+  });
 
   tickerStart();
 })();

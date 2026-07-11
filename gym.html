@@ -452,6 +452,7 @@ img, video, canvas, svg { max-width: 100%; }
   line-height: 1.4;
 }
 .po-ses-rx-line .po-accent { color: var(--good); font-weight: 700; }
+.po-reprange { color: var(--text-3); font-size: 11.5px; }
 .po-ses-sets { display: flex; flex-direction: column; gap: 8px; }
 .po-ses-set-row {
   display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center;
@@ -579,6 +580,18 @@ img, video, canvas, svg { max-width: 100%; }
   font-size: 13.5px; font-weight: 700; color: var(--text-1); margin-bottom: 2px;
 }
 .po-day-detail-ex-meta { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+.po-lib-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 4px; border-bottom: 1px solid var(--border);
+}
+.po-lib-row:last-child { border-bottom: none; }
+.po-lib-name-wrap { flex: 1; min-width: 0; }
+.po-lib-name {
+  font-size: 13.5px; font-weight: 700; color: var(--text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.po-lib-meta { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.po-lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .po-day-detail-set-row {
   display: grid; grid-template-columns: 26px 1fr; gap: 10px;
   padding: 6px 4px; align-items: center;
@@ -1593,6 +1606,9 @@ img, video, canvas, svg { max-width: 100%; }
           <span class="po-tw-past-count" id="sessionCount">0</span>
           <span class="po-tw-past-arrow" id="sessionArrow">▾</span>
         </button>
+        <button class="po-btn-icon" id="libraryBtn" title="Exercise library" aria-label="Exercise library">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </button>
         <button class="po-btn-icon" id="addExBtn" title="Add exercise to this day" aria-label="Add exercise">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
@@ -1805,6 +1821,18 @@ img, video, canvas, svg { max-width: 100%; }
     <div id="dayDetailList"></div>
     <div class="po-modal-actions">
       <button class="po-btn-primary" id="dayDetailClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exercise Library Modal — every exercise ever created, regardless of
+     which day it's assigned to, with quick Edit/Delete per row. -->
+<div class="po-modal-bg" id="libraryModalBg">
+  <div class="po-modal">
+    <h3>Exercise library</h3>
+    <div id="libraryList"></div>
+    <div class="po-modal-actions">
+      <button class="po-btn-secondary" id="libraryClose">Close</button>
     </div>
   </div>
 </div>
@@ -2137,16 +2165,17 @@ img, video, canvas, svg { max-width: 100%; }
   }
   function rxLineHTML(ex, logs) {
     const rx = getRx(ex, logs);
+    const range = ex.repMin + '–' + ex.repMax;
     if (!rx) {
       const head = ex.bw
-        ? '<span class="po-accent">' + ex.repMin + '</span> reps'
-        : '<span class="po-accent">' + (ex.startWeight || 0) + unit() + '</span> &times; ' + ex.repMin + ' reps';
+        ? '<span class="po-accent">' + range + '</span> reps'
+        : '<span class="po-accent">' + (ex.startWeight || 0) + unit() + '</span> &times; ' + range + ' reps';
       return head + ' &middot; starting point';
     }
     const head = rx.bw
       ? '<span class="po-accent">' + rx.reps + '</span> reps'
       : '<span class="po-accent">' + rx.weight + unit() + '</span> &times; ' + rx.reps + ' reps';
-    return head + ' &middot; ' + escape(rx.tag);
+    return head + ' <span class="po-reprange">(' + range + ' range)</span>' + ' &middot; ' + escape(rx.tag);
   }
   function renderSession() {
     const list = $('sessionList');
@@ -3028,16 +3057,70 @@ img, video, canvas, svg { max-width: 100%; }
     $('exModalBg').classList.remove('show');
     renderAll();
   });
+  function deleteExercise(exId) {
+    state.exercises = state.exercises.filter(e => e.id !== exId);
+    delete state.logs[exId];
+    saveState();
+  }
   $('exDelete').addEventListener('click', () => {
     if (!editingExId) return;
     if (!confirm('Delete this exercise and all its logs?')) return;
-    state.exercises = state.exercises.filter(e => e.id !== editingExId);
-    delete state.logs[editingExId];
+    deleteExercise(editingExId);
     editingExId = null;
-    saveState();
     $('exModalBg').classList.remove('show');
     renderAll();
   });
+
+  // ============================================================
+  // EXERCISE LIBRARY — every exercise ever created, regardless of day,
+  // with quick Edit/Delete per row. Opened via the book icon next to
+  // "+ Add exercise" on the Session card.
+  // ============================================================
+  function renderLibrary() {
+    const wrap = $('libraryList');
+    if (!state.exercises.length) {
+      wrap.innerHTML = '<div class="po-empty">No exercises yet.</div>';
+      return;
+    }
+    const sorted = state.exercises.slice().sort((a, b) =>
+      dayName(a.day).localeCompare(dayName(b.day)) || a.name.localeCompare(b.name)
+    );
+    wrap.innerHTML = sorted.map(ex => (
+      '<div class="po-lib-row" data-ex="' + ex.id + '">'
+      + '<div class="po-lib-name-wrap">'
+      +   '<div class="po-lib-name">' + escape(ex.name) + '</div>'
+      +   '<div class="po-lib-meta">' + escape(dayName(ex.day)) + (ex.bw ? ' &middot; bodyweight' : '') + '</div>'
+      + '</div>'
+      + '<div class="po-lib-actions">'
+      +   '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit" aria-label="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
+      +   '<button type="button" class="po-ses-icon-btn" data-action="delete" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
+      + '</div>'
+      + '</div>'
+    )).join('');
+  }
+  $('libraryList').addEventListener('click', (e) => {
+    const row = e.target.closest('.po-lib-row');
+    if (!row) return;
+    const exId = row.dataset.ex;
+    const ex = state.exercises.find(x => x.id === exId);
+    if (!ex) return;
+    if (e.target.closest('[data-action="edit"]')) {
+      $('libraryModalBg').classList.remove('show');
+      openExModal('edit', ex);
+      return;
+    }
+    if (e.target.closest('[data-action="delete"]')) {
+      if (!confirm('Delete ' + ex.name + ' and all its logs? This cannot be undone.')) return;
+      deleteExercise(exId);
+      renderLibrary();
+      renderAll();
+    }
+  });
+  $('libraryBtn').addEventListener('click', () => {
+    renderLibrary();
+    $('libraryModalBg').classList.add('show');
+  });
+  $('libraryClose').addEventListener('click', () => $('libraryModalBg').classList.remove('show'));
 
   // ============================================================
   // ROTATION EDITOR (tap the day pill)
