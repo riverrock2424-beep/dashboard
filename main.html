@@ -475,6 +475,58 @@
     margin-bottom: 14px;
   }
 
+  .gm-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .gm-collapse-btn {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-tertiary);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, color 0.15s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .gm-collapse-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+  .gm-collapse-btn[aria-expanded="false"] { transform: rotate(-90deg); }
+
+  .gm-stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .gm-stat-tile {
+    text-align: center;
+    padding: 10px 6px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+  }
+  .gm-stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .gm-stat-label {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin-top: 4px;
+  }
+  @media (max-width: 420px) {
+    .gm-stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
   .gm-eyebrow {
     font-size: 10.5px;
     text-transform: uppercase;
@@ -674,33 +726,6 @@
     padding: 0 2px;
   }
 
-  .gm-queue-btn {
-    background: none;
-    border: none;
-    color: var(--text-tertiary);
-    opacity: 0.55;
-    cursor: pointer;
-    font-size: 14px;
-    flex-shrink: 0;
-    padding: 2px;
-    transition: opacity 0.2s ease, color 0.2s ease;
-  }
-  .gm-queue-btn.is-active {
-    color: var(--warning);
-    opacity: 1;
-    filter: drop-shadow(0 0 4px rgba(242,192,99,0.65));
-  }
-  .gm-queue-btn:disabled { cursor: not-allowed; }
-
-  .goal-row.is-queue-flashing {
-    animation: dash-queue-flash 0.48s ease;
-  }
-  @keyframes dash-queue-flash {
-    0%   { background: rgba(255,255,255,0.035); transform: scale(1); }
-    40%  { background: rgba(242,192,99,0.32); transform: scale(1.015); }
-    100% { background: rgba(255,255,255,0.035); transform: scale(1); }
-  }
-
   .goal-delete {
     background: none;
     border: none;
@@ -723,12 +748,6 @@
     text-decoration: line-through;
     text-decoration-color: rgba(255,255,255,0.4);
   }
-
-  .goal-row.is-queued {
-    background: rgba(242,192,99,0.10);
-    box-shadow: inset 3px 0 0 0 var(--warning);
-  }
-  .goal-row.is-queued .goal-text { color: #FFE2A8; }
 
   .goal-row.is-drag-over {
     border-top: 2px solid rgba(255,255,255,0.4);
@@ -987,6 +1006,19 @@
       </div>
     </div>
 
+    <div class="card gm-card" id="statsCard">
+      <div class="gm-card-header">
+        <div class="gm-eyebrow">Completed</div>
+        <button class="gm-collapse-btn" id="statsToggle" type="button" aria-expanded="true" aria-label="Toggle stats">&#9662;</button>
+      </div>
+      <div id="statsBody" class="gm-stats-row">
+        <div class="gm-stat-tile"><div class="gm-stat-num" id="statDaily">0</div><div class="gm-stat-label">Today</div></div>
+        <div class="gm-stat-tile"><div class="gm-stat-num" id="statWeekly">0</div><div class="gm-stat-label">This week</div></div>
+        <div class="gm-stat-tile"><div class="gm-stat-num" id="statMonthly">0</div><div class="gm-stat-label">This month</div></div>
+        <div class="gm-stat-tile"><div class="gm-stat-num" id="statAllTime">0</div><div class="gm-stat-label">All time</div></div>
+      </div>
+    </div>
+
     <div class="card gm-card" id="todayCard">
       <div class="gm-card-header">
         <div>
@@ -997,15 +1029,20 @@
             <span class="gm-progress-label" id="gmProgressLabel">no tasks yet</span>
           </div>
         </div>
-        <div class="gm-streak" id="gmStreak">
-          <span class="gm-streak-num" id="gmStreakNum">0</span>
-          <span class="gm-streak-label">day streak</span>
+        <div class="gm-header-right">
+          <div class="gm-streak" id="gmStreak">
+            <span class="gm-streak-num" id="gmStreakNum">0</span>
+            <span class="gm-streak-label">day streak</span>
+          </div>
+          <button class="gm-collapse-btn" id="todayToggle" type="button" aria-expanded="true" aria-label="Toggle today's tasks">&#9662;</button>
         </div>
       </div>
-      <div class="gm-bar" id="gmBar"></div>
-      <div id="emptyState" class="empty-state">No tasks for today yet &mdash; add one above.</div>
-      <ul id="goalList" class="goal-list gm-list"></ul>
-      <button class="gm-push-btn" id="gmPushBtn" type="button" style="display:none;">Push remaining to tomorrow</button>
+      <div id="todayBody">
+        <div class="gm-bar" id="gmBar"></div>
+        <div id="emptyState" class="empty-state">No tasks for today yet &mdash; add one above.</div>
+        <ul id="goalList" class="goal-list gm-list"></ul>
+        <button class="gm-push-btn" id="gmPushBtn" type="button" style="display:none;">Push remaining to tomorrow</button>
+      </div>
     </div>
 
     <div class="card gm-card gm-card-tomorrow" id="upcomingCard">
@@ -1014,10 +1051,15 @@
           <div class="gm-eyebrow">Upcoming</div>
           <div class="gm-tomorrow-sub">Scheduled for a later day &mdash; can be checked off early.</div>
         </div>
-        <div class="gm-tomorrow-count" id="gmUpcomingCount">0 planned</div>
+        <div class="gm-header-right">
+          <div class="gm-tomorrow-count" id="gmUpcomingCount">0 planned</div>
+          <button class="gm-collapse-btn" id="upcomingToggle" type="button" aria-expanded="true" aria-label="Toggle upcoming tasks">&#9662;</button>
+        </div>
       </div>
-      <div id="emptyStateUpcoming" class="empty-state">Nothing scheduled yet</div>
-      <div id="upcomingGroups"></div>
+      <div id="upcomingBody">
+        <div id="emptyStateUpcoming" class="empty-state">Nothing scheduled yet</div>
+        <div id="upcomingGroups"></div>
+      </div>
     </div>
 
     <div class="card gm-card gm-card-tomorrow" id="noDateCard">
@@ -1026,10 +1068,15 @@
           <div class="gm-eyebrow">Someday</div>
           <div class="gm-tomorrow-sub">No due date &mdash; do whenever.</div>
         </div>
-        <div class="gm-tomorrow-count" id="gmNoDateCount">0 planned</div>
+        <div class="gm-header-right">
+          <div class="gm-tomorrow-count" id="gmNoDateCount">0 planned</div>
+          <button class="gm-collapse-btn" id="noDateToggle" type="button" aria-expanded="true" aria-label="Toggle someday tasks">&#9662;</button>
+        </div>
       </div>
-      <div id="emptyStateNoDate" class="empty-state">Nothing here yet</div>
-      <ul id="noDateList" class="goal-list gm-list"></ul>
+      <div id="noDateBody">
+        <div id="emptyStateNoDate" class="empty-state">Nothing here yet</div>
+        <ul id="noDateList" class="goal-list gm-list"></ul>
+      </div>
     </div>
   </div>
 
@@ -1196,6 +1243,61 @@
 
   function getTodayGoals() { return storeGet(todayKey()) || []; }
 
+  // ===== Completion stats =====
+  // rollover() deletes each past day's bucket outright once its undone
+  // items have been carried forward, so per-task history (and doneAt)
+  // doesn't survive past that point. This log tallies completions by the
+  // date they were actually checked off, archived just before deletion, so
+  // "all time" / "this month" stats stay accurate indefinitely.
+  function getCompletionLog() {
+    return storeGet('taskCompletions_v1') || {};
+  }
+  function addCompletions(dateKey, count) {
+    if (!count) return;
+    const log = getCompletionLog();
+    log[dateKey] = (log[dateKey] || 0) + count;
+    storeSet('taskCompletions_v1', log);
+  }
+  function computeCompletionStats() {
+    const log = Object.assign({}, getCompletionLog());
+    // Merge in still-live buckets' done items (today, future dates picked
+    // early, someday) — these haven't been archived yet.
+    storeListKeys('goals:').forEach(function (key) {
+      const dateStr = key.slice('goals:'.length);
+      (storeGet(key) || []).forEach(function (g) {
+        if (!g.done) return;
+        const doneDateKey = g.doneAt
+          ? dateToString(new Date(g.doneAt))
+          : (DATE_KEY_RE.test(dateStr) ? dateStr : getActiveDateString());
+        log[doneDateKey] = (log[doneDateKey] || 0) + 1;
+      });
+    });
+
+    const todayStr = getActiveDateString();
+    const todayParts = todayStr.split('-').map(Number);
+    const today = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+    let daily = 0, weekly = 0, monthly = 0, allTime = 0;
+    Object.keys(log).forEach(function (dateKey) {
+      const n = log[dateKey];
+      allTime += n;
+      if (dateKey === todayStr) daily += n;
+      const parts = dateKey.split('-').map(Number);
+      if (parts.length !== 3 || isNaN(parts[0])) return;
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      const diffDays = Math.round((today - d) / 86400000);
+      if (diffDays >= 0 && diffDays < 7) weekly += n;
+      if (diffDays >= 0 && diffDays < 30) monthly += n;
+    });
+    return { daily: daily, weekly: weekly, monthly: monthly, allTime: allTime };
+  }
+  function renderCompletionStats() {
+    const stats = computeCompletionStats();
+    document.getElementById('statDaily').textContent = stats.daily;
+    document.getElementById('statWeekly').textContent = stats.weekly;
+    document.getElementById('statMonthly').textContent = stats.monthly;
+    document.getElementById('statAllTime').textContent = stats.allTime;
+  }
+
   // ===== Rollover & streak (run once on load) =====
 
   // Streak must read old-day records BEFORE rollover deletes them.
@@ -1245,6 +1347,10 @@
         });
         storeSet(tKey, today);
       }
+      goals.filter(function (g) { return g.done; }).forEach(function (g) {
+        const doneDateKey = g.doneAt ? dateToString(new Date(g.doneAt)) : dateStr;
+        addCompletions(doneDateKey, 1);
+      });
       storeDelete(key);
     });
   }
@@ -1361,7 +1467,6 @@
     const li = document.createElement('li');
     li.className = 'goal-row';
     if (goal.done) li.classList.add('is-done');
-    if (goal.queued) li.classList.add('is-queued');
     li.draggable = true;
 
     const handle = document.createElement('span');
@@ -1392,20 +1497,6 @@
     text.textContent = goal.text;
     makeInlineEdit(text, key, idx, reload);
     li.appendChild(text);
-
-    const queueBtn = document.createElement('button');
-    queueBtn.type = 'button';
-    queueBtn.className = 'gm-queue-btn' + (goal.queued ? ' is-active' : '');
-    queueBtn.textContent = '⚡';
-    queueBtn.addEventListener('click', function () {
-      const fresh = storeGet(key) || [];
-      if (!fresh[idx]) return;
-      fresh[idx].queued = !fresh[idx].queued;
-      storeSet(key, fresh);
-      li.classList.add('is-queue-flashing');
-      setTimeout(function () { reload(); }, 480);
-    });
-    li.appendChild(queueBtn);
 
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
@@ -1470,7 +1561,7 @@
     return storeListKeys('goals:')
       .map(function (k) { return k.slice('goals:'.length); })
       .filter(function (d) { return DATE_KEY_RE.test(d) && d > activeDate; })
-      .filter(function (d) { return (storeGet('goals:' + d) || []).length > 0; })
+      .filter(function (d) { return (storeGet('goals:' + d) || []).some(function (g) { return !g.done; }); })
       .sort();
   }
 
@@ -1479,17 +1570,24 @@
   function noDateKey() { return 'goals:none'; }
   function getNoDateGoals() { return storeGet(noDateKey()) || []; }
 
+  // Completing an Upcoming/Someday task early clears it from view instead
+  // of leaving a checked-off row sitting there — but the stored entry (and
+  // its doneAt) stays put so it still counts correctly once its actual day
+  // arrives (Today) and for the completion stats below.
   function loadNoDate() {
     const key = noDateKey();
     const goals = getNoDateGoals();
     const listEl = document.getElementById('noDateList');
     const emptyEl = document.getElementById('emptyStateNoDate');
     listEl.innerHTML = '';
-    emptyEl.style.display = goals.length === 0 ? 'block' : 'none';
+    let pending = 0;
     goals.forEach(function (g, i) {
+      if (g.done) return;
+      pending++;
       listEl.appendChild(buildGoalRow(g, i, key, loadNoDate));
     });
-    document.getElementById('gmNoDateCount').textContent = goals.length + ' planned';
+    emptyEl.style.display = pending === 0 ? 'block' : 'none';
+    document.getElementById('gmNoDateCount').textContent = pending + ' planned';
   }
 
   function loadUpcoming() {
@@ -1502,7 +1600,6 @@
     dates.forEach(function (dateStr) {
       const key = 'goals:' + dateStr;
       const goals = storeGet(key) || [];
-      total += goals.length;
 
       const group = document.createElement('div');
       group.className = 'gm-upcoming-group';
@@ -1515,6 +1612,8 @@
       const list = document.createElement('ul');
       list.className = 'goal-list gm-list';
       goals.forEach(function (g, i) {
+        if (g.done) return;
+        total++;
         list.appendChild(buildGoalRow(g, i, key, loadUpcoming));
       });
       group.appendChild(list);
@@ -1744,7 +1843,28 @@
   window.addEventListener('goals-changed', function () {
     tickerCycleIdx = 0;
     tickerTick();
+    renderCompletionStats();
   });
+
+  // ===== Collapsible sections — each toggle's open/closed state persists
+  // across reloads so a section you tuck away stays tucked away. =====
+  function makeCollapsible(toggleId, bodyId, defaultOpen) {
+    const storeKey = 'sectionOpen:' + toggleId;
+    const toggle = document.getElementById(toggleId);
+    const body = document.getElementById(bodyId);
+    const saved = storeGet(storeKey);
+    let open = saved === null ? defaultOpen : saved;
+    function apply() {
+      body.style.display = open ? '' : 'none';
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    apply();
+    toggle.addEventListener('click', function () {
+      open = !open;
+      storeSet(storeKey, open);
+      apply();
+    });
+  }
 
   // ===== Init =====
 
@@ -1783,6 +1903,12 @@
   loadUpcoming();
   loadNoDate();
   renderStreak();
+  renderCompletionStats();
+
+  makeCollapsible('statsToggle', 'statsBody', true);
+  makeCollapsible('todayToggle', 'todayBody', true);
+  makeCollapsible('upcomingToggle', 'upcomingBody', true);
+  makeCollapsible('noDateToggle', 'noDateBody', true);
 
   updateDayBar();
   setInterval(updateDayBar, 60 * 1000);
