@@ -446,7 +446,7 @@ img, video, canvas, svg { max-width: 100%; }
 .po-ses-rx-line .po-accent { color: var(--good); font-weight: 700; }
 .po-ses-sets { display: flex; flex-direction: column; gap: 8px; }
 .po-ses-set-row {
-  display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center;
 }
 .po-ses-set-label {
   font-size: 11px; font-weight: 700; color: var(--text-3);
@@ -497,6 +497,24 @@ img, video, canvas, svg { max-width: 100%; }
   -webkit-tap-highlight-color: transparent;
 }
 .po-ses-add-set:hover { color: var(--text-1); }
+.po-ses-set-del {
+  width: 26px; height: 34px; flex-shrink: 0;
+  border-radius: 9px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04); color: var(--text-3);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.po-ses-set-del:hover { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: var(--bad, #f87171); }
+.po-hidden-hint {
+  font-size: 12px; color: var(--text-3); margin-bottom: 8px;
+}
+.po-link-btn {
+  background: none; border: none; padding: 0; margin: 0;
+  color: var(--info); font: inherit; font-weight: 700; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.po-link-btn:hover { text-decoration: underline; }
 
 /* ----- Stats ----- */
 .po-stats-row {
@@ -1552,6 +1570,7 @@ img, video, canvas, svg { max-width: 100%; }
         </button>
       </div>
       <div class="po-no-ex" id="noExMsg" style="display:none">No exercises on this day yet. Tap <strong>+</strong> to add one.</div>
+      <div class="po-hidden-hint" id="hiddenHint" style="display:none"></div>
       <div id="sessionList"></div>
     </div>
 
@@ -1710,7 +1729,7 @@ img, video, canvas, svg { max-width: 100%; }
     <div class="po-stats-row">
       <div class="po-stat-box">
         <div class="po-stat-label" id="histOneRmLabel">Est. 1RM</div>
-        <div class="po-stat-val" id="histOneRm">—<span class="po-unit" id="histOneRmUnit">kg</span></div>
+        <div class="po-stat-val" id="histOneRm">—<span class="po-unit">kg</span></div>
       </div>
       <div class="po-stat-box">
         <div class="po-stat-label">Best set</div>
@@ -1864,6 +1883,13 @@ img, video, canvas, svg { max-width: 100%; }
     // Per-day, per-exercise substitutions ("swap" button) — only apply to
     // the date they were made on, e.g. { '2026-07-12': { exId: replacementExId } }.
     s.swaps = (s.swaps && typeof s.swaps === 'object') ? s.swaps : {};
+    // Per-day, per-exercise "extra sets" added via "+ Add set" beyond the
+    // exercise's configured targetSets, e.g. { '2026-07-12': { exId: 1 } }.
+    s.extraSets = (s.extraSets && typeof s.extraSets === 'object') ? s.extraSets : {};
+    // Per-day exercise ids hidden from that day's session only — the
+    // exercise itself and its day assignment are untouched, so it's back
+    // the next time that day comes around, e.g. { '2026-07-12': [exId] }.
+    s.hidden = (s.hidden && typeof s.hidden === 'object') ? s.hidden : {};
     s.filterDay = s.filterDay || s.days[0].id;
     // Split rotation lives in state so the user can edit it via the pill modal.
     // Stored as a plain array of names (e.g. ["Push", "Pull", "Legs", "Rest"]).
@@ -1957,6 +1983,49 @@ img, video, canvas, svg { max-width: 100%; }
     saveState();
   }
 
+  // ---- Today-only "remove from session" -----------------------------
+  // Hides an exercise from today's session view without touching its
+  // permanent day assignment or its logs, so it reappears next time
+  // that day comes around (and is untouched on every other day).
+  function getHiddenList() {
+    const k = todayKeyStr();
+    if (!state.hidden[k]) state.hidden[k] = [];
+    return state.hidden[k];
+  }
+  function isHiddenToday(exId) {
+    return getHiddenList().indexOf(exId) !== -1;
+  }
+  function hideFromToday(exId) {
+    const arr = getHiddenList();
+    if (arr.indexOf(exId) === -1) arr.push(exId);
+    saveState();
+  }
+  function unhideFromToday(exId) {
+    const arr = getHiddenList();
+    const idx = arr.indexOf(exId);
+    if (idx !== -1) arr.splice(idx, 1);
+    saveState();
+  }
+
+  // ---- Today's extra sets (persisted "+ Add set" count) --------------
+  function getExtraSets(exId) {
+    const k = todayKeyStr();
+    if (!state.extraSets[k]) state.extraSets[k] = {};
+    return state.extraSets[k][exId] || 0;
+  }
+  function addExtraSet(exId) {
+    const k = todayKeyStr();
+    if (!state.extraSets[k]) state.extraSets[k] = {};
+    state.extraSets[k][exId] = (state.extraSets[k][exId] || 0) + 1;
+    saveState();
+  }
+  function removeExtraSet(exId) {
+    const k = todayKeyStr();
+    if (!state.extraSets[k]) state.extraSets[k] = {};
+    state.extraSets[k][exId] = Math.max(0, (state.extraSets[k][exId] || 0) - 1);
+    saveState();
+  }
+
   // Prescription engine — "what should I do next session?"
   // Upgrade trigger: hits CONFIG.upgradeAtReps (default 8) OR the
   // exercise's repMax, whichever fires first. So a 5-8 lifter hits
@@ -2012,6 +2081,16 @@ img, video, canvas, svg { max-width: 100%; }
     const k = todayKeyStr();
     return getLogsFor(exId).filter(l => (l.date || '').slice(0, 10) === k);
   }
+  // Matches a set row to its logged entry by the row index it was actually
+  // logged from (setIndex), not by array/creation order — so ticking set 3
+  // before set 1 doesn't show up on the wrong row. Falls back to positional
+  // matching only for legacy entries logged before setIndex existed.
+  function findSetLog(todayLogs, i) {
+    const tagged = todayLogs.find(l => l.setIndex === i);
+    if (tagged) return tagged;
+    if (!todayLogs.some(l => l.setIndex != null)) return todayLogs[i];
+    return undefined;
+  }
   function computeSetTarget(ex, logs) {
     const rx = getRx(ex, logs);
     if (rx) return { weight: rx.weight, reps: rx.reps };
@@ -2033,10 +2112,28 @@ img, video, canvas, svg { max-width: 100%; }
   function renderSession() {
     const list = $('sessionList');
     const noMsg = $('noExMsg');
-    const dayExercises = getDayExercises(state.filterDay);
+    const hiddenHint = $('hiddenHint');
+    const allDayExercises = getDayExercises(state.filterDay);
+    const dayExercises = allDayExercises.filter(e => !isHiddenToday(e.id));
+    const hiddenCount = allDayExercises.length - dayExercises.length;
+    if (hiddenHint) {
+      if (hiddenCount > 0) {
+        hiddenHint.style.display = 'block';
+        hiddenHint.innerHTML = hiddenCount + (hiddenCount === 1 ? ' exercise' : ' exercises')
+          + ' removed from today’s session &middot; <button type="button" id="restoreHiddenBtn" class="po-link-btn">Restore</button>';
+        const restoreBtn = $('restoreHiddenBtn');
+        if (restoreBtn) restoreBtn.addEventListener('click', () => {
+          allDayExercises.forEach(e => unhideFromToday(e.id));
+          renderSession();
+        });
+      } else {
+        hiddenHint.style.display = 'none';
+        hiddenHint.innerHTML = '';
+      }
+    }
     if (!dayExercises.length) {
       list.innerHTML = '';
-      noMsg.style.display = 'block';
+      noMsg.style.display = hiddenCount > 0 ? 'none' : 'block';
       return;
     }
     noMsg.style.display = 'none';
@@ -2045,11 +2142,9 @@ img, video, canvas, svg { max-width: 100%; }
       const ex = resolveForToday(planned);
       const logs = getLogsFor(ex.id);
       const todayLogs = todaysLogsFor(ex.id);
-      // "+ Add set" reveals one pending row beyond whatever's already
-      // shown; once that row gets logged, todayLogs naturally covers it
-      // and the one-off flag clears itself so it doesn't keep adding more.
-      if (state._extraSetFor === ex.id && todayLogs.length > (ex.targetSets || 3)) state._extraSetFor = null;
-      const rowCount = Math.max(ex.targetSets || 3, todayLogs.length) + (state._extraSetFor === ex.id ? 1 : 0);
+      const baseCount = ex.targetSets || 3;
+      const extra = getExtraSets(ex.id);
+      const rowCount = Math.max(baseCount + extra, todayLogs.length);
       const target = computeSetTarget(ex, logs);
       const lastToday = todayLogs[todayLogs.length - 1];
 
@@ -2060,7 +2155,9 @@ img, video, canvas, svg { max-width: 100%; }
 
       let setsHtml = '';
       for (let i = 0; i < rowCount; i++) {
-        const done = todayLogs[i];
+        const done = findSetLog(todayLogs, i);
+        const isExtraRow = i >= baseCount;
+        const isLastRow = i === rowCount - 1;
         const baseW = done ? done.weight : (lastToday ? lastToday.weight : target.weight);
         const inputs = ex.unilateral
           ? (ex.bw ? '' : '<input type="number" step="0.5" class="po-ses-w" value="' + baseW + '">')
@@ -2068,10 +2165,14 @@ img, video, canvas, svg { max-width: 100%; }
             + '<input type="number" class="po-ses-rr" value="' + (done ? (done.repsR || 0) : target.reps) + '" placeholder="R">'
           : (ex.bw ? '' : '<input type="number" step="0.5" class="po-ses-w" value="' + baseW + '">')
             + '<input type="number" class="po-ses-r" value="' + (done ? (done.reps || 0) : target.reps) + '" placeholder="reps">';
+        const delBtn = (isExtraRow && isLastRow)
+          ? '<button type="button" class="po-ses-set-del" data-action="delset" aria-label="Delete set" title="Delete this set">&times;</button>'
+          : '';
         setsHtml += '<div class="po-ses-set-row' + (done ? ' is-done' : '') + '" data-set="' + i + '">'
           + '<span class="po-ses-set-label">' + (i + 1) + '</span>'
           + '<div class="po-ses-set-inputs">' + inputs + '</div>'
           + '<button type="button" class="po-ses-set-check" data-action="log" aria-label="' + (done ? 'Untick set' : 'Log set') + '" title="' + (done ? 'Tap to untick' : 'Tap to log') + '">' + (done ? '&#10003;' : '&#43;') + '</button>'
+          + delBtn
           + '</div>';
       }
 
@@ -2085,6 +2186,7 @@ img, video, canvas, svg { max-width: 100%; }
         +     '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit exercise" aria-label="Edit exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="history" title="History" aria-label="History"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="swap" title="Swap exercise" aria-label="Swap exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>'
+        +     '<button type="button" class="po-ses-icon-btn" data-action="remove" title="Remove from today\'s session" aria-label="Remove from today\'s session"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
         +   '</div>'
         + '</div>'
         + '<div class="po-ses-rx-line">' + rxLineHTML(ex, logs) + '</div>'
@@ -2114,20 +2216,53 @@ img, video, canvas, svg { max-width: 100%; }
     const swapBtn = e.target.closest('[data-action="swap"]');
     if (swapBtn) { openSwapModal(originalId); return; }
 
+    const removeBtn = e.target.closest('[data-action="remove"]');
+    if (removeBtn) {
+      if (!confirm('Remove ' + ex.name + ' from today\'s session? It stays in your exercise library and on any other day — this only skips it for today.')) return;
+      hideFromToday(originalId);
+      renderSession();
+      return;
+    }
+
     const addSetBtn = e.target.closest('[data-action="addset"]');
-    if (addSetBtn) { state._extraSetFor = exId; renderSession(); return; }
+    if (addSetBtn) { addExtraSet(exId); renderSession(); return; }
+
+    const delSetBtn = e.target.closest('[data-action="delset"]');
+    if (delSetBtn) {
+      if (!confirm('Delete this set?')) return;
+      const row = delSetBtn.closest('.po-ses-set-row');
+      const setIdx = parseInt(row.dataset.set, 10);
+      const todayLogs = todaysLogsFor(exId);
+      const existing = findSetLog(todayLogs, setIdx);
+      if (existing) {
+        const arr = state.logs[exId] || [];
+        const origIdx = arr.indexOf(existing);
+        if (origIdx !== -1) arr.splice(origIdx, 1);
+        if (!arr.length) delete state.logs[exId]; else state.logs[exId] = arr;
+      }
+      removeExtraSet(exId);
+      saveState();
+      renderSession();
+      renderTodaysWorkout();
+      renderPastWorkouts();
+      renderGymCalendar();
+      if (typeof wtRender === 'function') wtRender();
+      return;
+    }
 
     const logBtn = e.target.closest('[data-action="log"]');
     if (logBtn) {
       const row = logBtn.closest('.po-ses-set-row');
       const setIdx = parseInt(row.dataset.set, 10);
       const todayLogs = todaysLogsFor(exId);
-      const existing = todayLogs[setIdx];
+      const existing = findSetLog(todayLogs, setIdx);
 
       if (existing) {
         // Already logged — tapping again unticks it back to pending
         // rather than re-saving, so a mistaken tap (or a set you want to
         // redo) can be undone without deleting through the History modal.
+        // This only clears the logged data for THIS row — the row/slot
+        // itself stays put (deleting the slot is a separate action).
         const arr = state.logs[exId] || [];
         const origIdx = arr.indexOf(existing);
         if (origIdx !== -1) arr.splice(origIdx, 1);
@@ -2148,6 +2283,7 @@ img, video, canvas, svg { max-width: 100%; }
           entry = { weight, reps };
         }
         entry.date = new Date().toISOString();
+        entry.setIndex = setIdx;
         const arr = state.logs[exId] || [];
         arr.push(entry);
         state.logs[exId] = arr;
@@ -2256,7 +2392,6 @@ img, video, canvas, svg { max-width: 100%; }
     if (!ex) return;
     const logs = getLogsFor(ex.id);
     $('historyModalTitle').textContent = ex.name;
-    $('histOneRmUnit').textContent = unit();
     renderStatsFor(ex, logs);
     renderSparklineFor(ex, logs);
     renderHistoryListFor(ex, logs);
