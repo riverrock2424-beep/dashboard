@@ -254,8 +254,9 @@ body.topbar-modal-open {
     return { done, total: 1 };
   }
 
-  // Returns { done, total } in ml — water.html is ml-only now, no more
-  // bottle/glass/oz unit concept to convert through.
+  // Mirrors water.html's computeTargetMl() so the pill's target matches
+  // what the Water page itself shows — same gym weight/activity + weather
+  // inputs, in ml (water.html is ml-only, no bottle/glass/oz to convert).
   function getWaterProgress() {
     let state = null;
     try { state = JSON.parse(localStorage.getItem('po_water_v1')); } catch (e) {}
@@ -264,18 +265,49 @@ body.topbar-modal-open {
     const taps = (state.logs || {})[todayKey] || 0;
     const doneMl = taps * (state.mlIncrement || 100);
     const p = state.profile || { weightKg: 75 };
-    const wKg = state.weightUnit === 'lb' ? (p.weightKg || 0) / 2.20462 : (p.weightKg || 0);
+
+    let gymWeightKg = null;
+    try {
+      const entries = JSON.parse(localStorage.getItem('po_coach_weights'));
+      if (Array.isArray(entries) && entries.length) {
+        entries.sort((a, b) => (a.dateKey || '').localeCompare(b.dateKey || ''));
+        const last = entries[entries.length - 1];
+        if (last && last.weight != null) {
+          const coach = JSON.parse(localStorage.getItem('po_coach_v1')) || {};
+          gymWeightKg = coach.units === 'lb' ? last.weight / 2.20462 : last.weight;
+        }
+      }
+    } catch (e) {}
+
+    let gymActivity = null;
+    try {
+      const doneDays = JSON.parse(localStorage.getItem('po_coach_workout_done'));
+      if (doneDays && typeof doneDays === 'object') {
+        gymActivity = 0;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          if (doneDays[k]) gymActivity++;
+        }
+      }
+    } catch (e) {}
+
+    let weatherTempC = null;
+    try {
+      const w = JSON.parse(localStorage.getItem('po_water_weather_v1'));
+      if (w && w.tempC != null && (Date.now() - w.fetchedAt) < 45 * 60 * 1000) weatherTempC = w.tempC;
+    } catch (e) {}
+
+    const wKg = gymWeightKg != null ? gymWeightKg : (state.weightUnit === 'lb' ? (p.weightKg || 0) / 2.20462 : (p.weightKg || 0));
+    const activityHrs = gymActivity != null ? gymActivity : (p.activityHrsPerWeek || 0);
     const base = wKg * 35;
-    const exercise = (p.activityHrsPerWeek || 0) / 7 * 500;
-    const caffeine = Math.max(0, (state.caffeineMgPerDay || 0) - 200) * 1.5;
-    const subs = (state.substances || []).reduce((s, x) => {
-      const dose = (x && x.dose != null ? x.dose : (x && x.defaultDose)) || 0;
-      return s + Math.max(0, dose * ((x && x.mlPerUnit) || 0));
-    }, 0);
+    const exercise = activityHrs / 7 * 500;
+    const weather = (weatherTempC != null && weatherTempC > 20) ? Math.min(1000, (weatherTempC - 20) * 40) : 0;
     let adjust = 0;
     if (p.sex === 'm') adjust += 200;
     if ((p.age || 0) >= 50) adjust += 100;
-    const totalMl = base + exercise + caffeine + subs + adjust;
+    const totalMl = base + exercise + weather + adjust;
     return { done: doneMl, total: Math.max(1, Math.round(totalMl)) };
   }
 
@@ -332,7 +364,7 @@ body.topbar-modal-open {
     return {
       mlIncrement: 100, weightUnit: 'kg',
       profile: { weightKg: 75, age: 25, sex: 'm', activityHrsPerWeek: 5 },
-      caffeineMgPerDay: 200, substances: [], logs: {}
+      logs: {}
     };
   }
 

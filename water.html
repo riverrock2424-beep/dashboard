@@ -37,17 +37,7 @@ const CONFIG = {
     age: 25,
     sex: "m",            // "m" | "f" | "o"
     activityHrsPerWeek: 5
-  },
-
-  // Default daily caffeine in mg (200 mg ≈ two cups of coffee).
-  caffeineMgPerDay: 200,
-
-  // Pre-loaded substances. The Settings → Stimulants & meds search uses
-  // this list; users can add custom entries with `extraWaterMl` each.
-  // Numbers are conservative additions to daily water needs based on
-  // peer-reviewed effects (diuresis, dry-mouth, reduced thirst signal,
-  // narrow-therapeutic-window safety bumps).
-  defaultSubstances: []
+  }
 };
 </script>
 
@@ -405,83 +395,6 @@ html, body {
   color: #0a0a0b;
 }
 
-/* ----- Stimulant search ----- */
-.search-wrap { position: relative; }
-.search-input {
-  width: 100%; background: rgba(0,0,0,0.28);
-  border: 1px solid var(--border);
-  color: var(--text-1); font-family: inherit; font-size: 14px;
-  padding: 11px 14px; border-radius: 10px; outline: none;
-}
-.search-input:focus { border-color: rgba(110,231,183,0.40); }
-.search-results {
-  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px; padding: 4px;
-  max-height: 240px; overflow-y: auto;
-  z-index: 5;
-  display: none;
-}
-.search-results.show { display: block; }
-.search-result {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 9px 12px; border-radius: 7px;
-  cursor: pointer; font-size: 13px;
-  -webkit-tap-highlight-color: transparent;
-}
-.search-result:hover { background: rgba(255,255,255,0.05); }
-.search-result-name { color: var(--text-1); font-weight: 600; }
-.search-result-meta {
-  font-size: 10.5px; color: var(--text-3);
-  font-family: var(--font-mono);
-}
-.search-result-add { color: var(--good); }
-
-.subs-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.sub-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.025);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  flex-wrap: wrap;
-}
-.sub-row-info { flex: 1; min-width: 140px; }
-.sub-row-name { font-size: 13px; font-weight: 600; color: var(--text-1); }
-.sub-row-meta {
-  font-size: 11px; color: var(--text-3);
-  font-variant-numeric: tabular-nums; font-family: var(--font-mono);
-  margin-top: 2px;
-}
-.sub-row-dose {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(0,0,0,0.30);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 8px;
-}
-.sub-row-dose .sub-dose-input {
-  width: 56px; background: transparent; border: none; outline: none;
-  color: var(--text-1); font-family: inherit; font-size: 13px;
-  font-weight: 600; text-align: center;
-  font-variant-numeric: tabular-nums;
-  -moz-appearance: textfield;
-}
-.sub-row-dose .sub-dose-input::-webkit-outer-spin-button,
-.sub-row-dose .sub-dose-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.sub-row-dose .sub-dose-unit {
-  font-size: 11px; color: var(--text-3);
-  font-family: var(--font-mono);
-  white-space: nowrap;
-}
-.sub-row-del {
-  background: transparent; border: none; color: var(--text-4);
-  font-size: 16px; cursor: pointer; padding: 4px 8px;
-  -webkit-tap-highlight-color: transparent;
-}
-.sub-row-del:hover { color: var(--bad); }
-
 /* ----- Buttons ----- */
 .btn-primary {
   width: 100%; padding: 13px;
@@ -545,13 +458,12 @@ html, body {
     <div class="water-bar-wrap">
       <div class="water-bar-track">
         <div class="water-bar-fill" id="waterBarFill" style="width:0%"></div>
-        <div class="water-bar-zone" id="waterBarZoneStart" style="left:55%"></div>
-        <div class="water-bar-zone" id="waterBarZoneEnd"   style="left:80%"></div>
+        <div class="water-bar-zone" id="waterBarZoneStart" style="left:65%"></div>
       </div>
       <div class="water-bar-labels">
         <span id="waterBarMin">0</span>
         <span class="water-zone-name">healthy zone</span>
-        <span id="waterBarMax">12+</span>
+        <span id="waterBarMax">2800 ml</span>
       </div>
     </div>
 
@@ -642,34 +554,6 @@ html, body {
     </div>
 
     <div class="set-section">
-      <h4>Caffeine</h4>
-      <div class="field">
-        <label>Average caffeine per day (mg)</label>
-        <input type="number" id="setCaffeine" min="0" max="1000" step="10">
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.4">
-          ~1 cup of coffee = 95mg · espresso shot = 75mg · energy drink = 160mg.
-          Above 200mg/day starts to add a small water requirement.
-        </div>
-      </div>
-    </div>
-
-    <div class="set-section">
-      <h4>Stimulants & meds</h4>
-      <div class="field">
-        <label>Search to add</label>
-        <div class="search-wrap">
-          <input type="text" class="search-input" id="subSearch" placeholder="Type a name (Adderall, Concerta, Lithium…)" autocomplete="off">
-          <div class="search-results" id="subResults"></div>
-        </div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:4px;line-height:1.4">
-          Each substance bumps your daily water target. Includes ADHD stims,
-          diuretics, decongestants, nicotine, alcohol, and a few others.
-        </div>
-      </div>
-      <div class="subs-list" id="subsList"></div>
-    </div>
-
-    <div class="set-section">
       <h4>Data</h4>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-secondary" id="setExport">Export JSON</button>
@@ -719,57 +603,6 @@ html, body {
   const $ = (id) => document.getElementById(id);
 
   // ============================================================
-  // SUBSTANCE DATABASE — daily water bumps scale with YOUR dose.
-  //
-  // Each entry has:
-  //   unit         — what you measure the dose in (mg, pouches/day, drinks/day…)
-  //   defaultDose  — typical adult therapeutic dose (just a starting value)
-  //   mlPerUnit    — extra ml of water needed per 1 unit of dose
-  //
-  // Final water bump for a substance you've added = dose × mlPerUnit.
-  // So 36mg Concerta → 36 × 13.9 ≈ 500ml. 18mg Concerta → ≈ 250ml.
-  //
-  // Numbers based on conservative reads of:
-  //   - ADHD stim diuresis + reduced thirst signal (Adler/Wilens reviews)
-  //   - Lithium narrow therapeutic window (Cooper 2014, NICE guidelines)
-  //   - Thiazide / loop diuretic SE profiles
-  //   - Alcohol diuresis (Hobson 2010 — ~10ml urine per gram ethanol)
-  // ============================================================
-  const SUBSTANCE_DB = [
-    { id: 'adderall',    name: 'Adderall (mixed amphetamine salts)', cat: 'ADHD stim',    unit: 'mg',           defaultDose: 20,   mlPerUnit: 25,    note: 'Stim · reduces thirst signal · dries you out' },
-    { id: 'concerta',    name: 'Concerta (methylphenidate ER)',      cat: 'ADHD stim',    unit: 'mg',           defaultDose: 36,   mlPerUnit: 13.9,  note: 'Stim · reduces thirst signal' },
-    { id: 'vyvanse',     name: 'Vyvanse (lisdexamfetamine)',         cat: 'ADHD stim',    unit: 'mg',           defaultDose: 50,   mlPerUnit: 10,    note: 'Stim prodrug · long acting' },
-    { id: 'ritalin',     name: 'Ritalin IR (methylphenidate)',       cat: 'ADHD stim',    unit: 'mg',           defaultDose: 20,   mlPerUnit: 20,    note: 'Short-acting stim' },
-    { id: 'focalin',     name: 'Focalin / Focalin XR',               cat: 'ADHD stim',    unit: 'mg',           defaultDose: 20,   mlPerUnit: 20,    note: 'Methylphenidate isomer' },
-    { id: 'modafinil',   name: 'Modafinil',                          cat: 'Wakefulness',  unit: 'mg',           defaultDose: 200,  mlPerUnit: 1.75,  note: 'Mild dehydrating effect' },
-    { id: 'lithium',     name: 'Lithium',                            cat: 'Mood',         unit: 'mg',           defaultDose: 600,  mlPerUnit: 1.67,  note: 'Critical — narrow therapeutic window, dehydration → toxicity' },
-    { id: 'hctz',        name: 'Hydrochlorothiazide (HCTZ)',         cat: 'Diuretic',     unit: 'mg',           defaultDose: 25,   mlPerUnit: 40,    note: 'Direct diuretic — drink to compensate' },
-    { id: 'lasix',       name: 'Furosemide (Lasix)',                 cat: 'Diuretic',     unit: 'mg',           defaultDose: 40,   mlPerUnit: 30,    note: 'Loop diuretic · talk to your doctor about target' },
-    { id: 'spironol',    name: 'Spironolactone',                     cat: 'Diuretic',     unit: 'mg',           defaultDose: 50,   mlPerUnit: 12,    note: 'K-sparing diuretic' },
-    { id: 'sudafed',     name: 'Pseudoephedrine (Sudafed)',          cat: 'Decongestant', unit: 'mg',           defaultDose: 60,   mlPerUnit: 4.17,  note: 'Sympathomimetic · dries mucous membranes' },
-    { id: 'phenyl',      name: 'Phenylephrine',                      cat: 'Decongestant', unit: 'mg',           defaultDose: 10,   mlPerUnit: 20,    note: 'Vasoconstrictor — mild' },
-    { id: 'nicotine',    name: 'Nicotine pouch (Velo / Zyn)',        cat: 'Stim',         unit: 'pouches/day',  defaultDose: 4,    mlPerUnit: 62.5,  note: 'Vasoconstriction + dry mouth' },
-    { id: 'nicpatch',    name: 'Nicotine patch',                     cat: 'Stim',         unit: 'mg',           defaultDose: 14,   mlPerUnit: 18,    note: '24-h transdermal · sustained release' },
-    { id: 'alcohol',     name: 'Alcohol',                            cat: 'Depressant',   unit: 'drinks/day',   defaultDose: 1,    mlPerUnit: 400,   note: '~10ml urine per gram ethanol — adds up fast' },
-    { id: 'cannabis',    name: 'Cannabis / THC',                     cat: 'Other',        unit: 'sessions/day', defaultDose: 1,    mlPerUnit: 250,   note: 'Cottonmouth — saliva gland inhibition' },
-    { id: 'creatine',    name: 'Creatine monohydrate',               cat: 'Supplement',   unit: 'g/day',        defaultDose: 5,    mlPerUnit: 80,    note: 'Pulls water into muscle cells — drink more' },
-    { id: 'preworkout',  name: 'Pre-workout (caffeine + others)',    cat: 'Stim',         unit: 'servings/day', defaultDose: 1,    mlPerUnit: 300,   note: 'High-stim formula on top of caffeine' },
-    { id: 'metformin',   name: 'Metformin',                          cat: 'Glucose',      unit: 'mg',           defaultDose: 1000, mlPerUnit: 0.3,   note: 'Mild GI fluid loss' },
-    { id: 'sertraline',  name: 'SSRI (sertraline / escitalopram / fluoxetine)', cat: 'SSRI', unit: 'mg',         defaultDose: 50,   mlPerUnit: 4,     note: 'Mild dry mouth in some users' },
-    { id: 'wellbutrin',  name: 'Bupropion (Wellbutrin)',             cat: 'NDRI',         unit: 'mg',           defaultDose: 300,  mlPerUnit: 1.17,  note: 'Stim-like profile' }
-  ];
-
-  // Compute the actual ml/day a saved substance contributes given the user's dose.
-  function subExtraMl(s) {
-    const dose = (s.dose != null ? s.dose : s.defaultDose) || 0;
-    return Math.max(0, dose * (s.mlPerUnit || 0));
-  }
-  function subDoseLabel(s) {
-    const dose = (s.dose != null ? s.dose : s.defaultDose);
-    return dose + ' ' + (s.unit || '');
-  }
-
-  // ============================================================
   // STATE
   // ============================================================
   const LS_KEY = 'po_water_v1';
@@ -785,8 +618,6 @@ html, body {
     s.mlIncrement = s.mlIncrement || CONFIG.mlIncrement || 100;
     s.weightUnit = s.weightUnit || 'kg';
     s.profile = Object.assign({}, CONFIG.profile, s.profile || {});
-    s.caffeineMgPerDay = (s.caffeineMgPerDay != null) ? s.caffeineMgPerDay : (CONFIG.caffeineMgPerDay || 200);
-    s.substances = Array.isArray(s.substances) ? s.substances : (CONFIG.defaultSubstances || []);
     s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};  // {YYYY-MM-DD: number_of_servings}
     return s;
   }
@@ -898,8 +729,6 @@ html, body {
   //
   //   base_ml    = weight_kg × 35 ml      (NAM/IOM standard)
   //   exercise   = activity_hrs/wk ÷ 7 × 500 ml/day   (≈500 ml/hr training)
-  //   caffeine   = max(0, caffeineMg − 200) × 1.5 ml  (mild diuresis)
-  //   substances = sum of extraMl for each added med/stim
   //   weather    = extra ml on hot days (see weatherExtraMl)
   //   adjustments: +200 ml male, +100 ml age 50+
   //
@@ -915,17 +744,15 @@ html, body {
     const activityHrs = gymActivity != null ? gymActivity : (p.activityHrsPerWeek || 0);
     const base = wKg * 35;
     const exercise = activityHrs / 7 * 500;
-    const caffeine = Math.max(0, (state.caffeineMgPerDay || 0) - 200) * 1.5;
-    const subs = (state.substances || []).reduce((s, x) => s + subExtraMl(x), 0);
     const weather = weatherExtraMl(weatherState ? weatherState.tempC : null);
     let adjust = 0;
     if (p.sex === 'm') adjust += 200;
     if ((p.age || 0) >= 50) adjust += 100;
     return {
-      base, exercise, caffeine, subs, weather, adjust,
+      base, exercise, weather, adjust,
       usingGymWeight: gymWeightKg != null,
       usingGymActivity: gymActivity != null,
-      total: base + exercise + caffeine + subs + weather + adjust
+      total: base + exercise + weather + adjust
     };
   }
 
@@ -955,19 +782,19 @@ html, body {
     $('waterTarget').textContent = '/ ' + targetMl + ' ml';
     $('waterPlusLabel').textContent = 'Drank ' + (state.mlIncrement || 100) + ' ml';
 
-    // Progress bar with three zones: low (0-65%), healthy (65-100%), over (100-150%).
-    // Computed directly from ml so it can never drift from the displayed
-    // numbers regardless of what mlIncrement is set to.
+    // Progress bar always ends exactly at your target — 100% width = goal
+    // met, full stop. No 150%-scale here; that was what made the bar look
+    // like the goal was higher than it actually is. Drinking past target
+    // just holds the bar full and switches to the "over" color.
     const pctRaw = targetMl > 0 ? (drankMl / targetMl) * 100 : 0;
-    const fillPct = Math.min(150, pctRaw) / 1.5;   // bar represents 0-150%
+    const fillPct = Math.min(100, pctRaw);
     const fill = $('waterBarFill');
     fill.style.width = fillPct + '%';
     fill.classList.toggle('over', pctRaw > 100);
     $('waterBarMin').textContent = '0 ml';
-    $('waterBarMax').textContent = (Math.ceil(targetMl * 1.5)) + '+ ml';
-    // Healthy zone bands at 65% and 100%
-    $('waterBarZoneStart').style.left = (65 / 1.5) + '%';
-    $('waterBarZoneEnd').style.left   = (100 / 1.5) + '%';
+    $('waterBarMax').textContent = targetMl + ' ml';
+    // Healthy zone starts at 65% of the target.
+    $('waterBarZoneStart').style.left = '65%';
 
     // Helper text
     const helper = $('waterHelper');
@@ -998,11 +825,6 @@ html, body {
       const exLabel = calc.usingGymActivity ? 'from Gym, this week' : (state.profile.activityHrsPerWeek + ' h/wk');
       html += '<div class="why-row"><span class="why-label">+ Exercise (' + exLabel + ')</span><span class="why-val">+ ' + fmtMl(calc.exercise) + '</span></div>';
     }
-    if (calc.caffeine > 0)
-      html += '<div class="why-row"><span class="why-label">+ Caffeine (' + state.caffeineMgPerDay + ' mg/day)</span><span class="why-val">+ ' + fmtMl(calc.caffeine) + '</span></div>';
-    (state.substances || []).forEach(s => {
-      html += '<div class="why-row"><span class="why-label">+ ' + escape(s.name) + ' (' + escape(subDoseLabel(s)) + ')</span><span class="why-val">+ ' + fmtMl(subExtraMl(s)) + '</span></div>';
-    });
     if (calc.weather > 0)
       html += '<div class="why-row"><span class="why-label">+ Hot weather (' + Math.round(weatherState.tempC) + '°C)</span><span class="why-val">+ ' + fmtMl(calc.weather) + '</span></div>';
     if (calc.adjust > 0)
@@ -1116,14 +938,12 @@ html, body {
     $('setActivity').disabled = gymActivity != null;
     $('setActivityNote').style.display = gymActivity != null ? '' : 'none';
 
-    $('setCaffeine').value = state.caffeineMgPerDay;
     $('setMlIncrement').value = state.mlIncrement;
 
     setSegActive('setWeightUnit', state.weightUnit);
     setSegActive('setSex', state.profile.sex);
 
     refreshWeather(false);
-    renderSubsList();
   }
   function setSegActive(segId, value) {
     $(segId).querySelectorAll('button').forEach(b => {
@@ -1144,99 +964,15 @@ html, body {
   bindSeg('setWeightUnit', 'u', (v) => { state.weightUnit = v; saveState(); renderWater(); });
   bindSeg('setSex', 's', (v) => { state.profile.sex = v; saveState(); renderWater(); });
 
-  ['setWeight','setAge','setActivity','setCaffeine','setMlIncrement'].forEach(id => {
+  ['setWeight','setAge','setActivity','setMlIncrement'].forEach(id => {
     $(id).addEventListener('input', () => {
       const v = parseFloat($(id).value);
       if (id === 'setWeight') state.profile.weightKg = v || 0;
       else if (id === 'setAge') state.profile.age = v || 0;
       else if (id === 'setActivity') state.profile.activityHrsPerWeek = v || 0;
-      else if (id === 'setCaffeine') state.caffeineMgPerDay = v || 0;
       else if (id === 'setMlIncrement') state.mlIncrement = v || 100;
       saveState(); renderWater();
     });
-  });
-
-  function renderSubsList() {
-    const list = $('subsList');
-    if (!state.substances || !state.substances.length) {
-      list.innerHTML = '<div style="font-size:12px;color:var(--text-3);text-align:center;padding:14px 0;font-style:italic;">No substances added.</div>';
-      return;
-    }
-    list.innerHTML = state.substances.map((s, i) =>
-      '<div class="sub-row" data-i="' + i + '">'
-      + '<div class="sub-row-info">'
-      +   '<div class="sub-row-name">' + escape(s.name) + '</div>'
-      +   '<div class="sub-row-meta">+ ' + fmtMl(subExtraMl(s)) + ' / day · ' + escape(s.cat || '') + '</div>'
-      + '</div>'
-      + '<div class="sub-row-dose">'
-      +   '<input type="number" class="sub-dose-input" data-i="' + i + '" min="0" step="0.5" value="' + (s.dose != null ? s.dose : s.defaultDose) + '">'
-      +   '<span class="sub-dose-unit">' + escape(s.unit || '') + '</span>'
-      + '</div>'
-      + '<button class="sub-row-del" data-i="' + i + '" aria-label="Remove">×</button>'
-      + '</div>'
-    ).join('');
-    list.querySelectorAll('.sub-dose-input').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const i = parseInt(inp.dataset.i, 10);
-        state.substances[i].dose = parseFloat(inp.value) || 0;
-        saveState();
-        // Re-render the meta line for this row + the why card
-        const row = inp.closest('.sub-row');
-        const meta = row.querySelector('.sub-row-meta');
-        meta.textContent = '+ ' + fmtMl(subExtraMl(state.substances[i])) + ' / day · ' + (state.substances[i].cat || '');
-        renderWater();
-      });
-    });
-    list.querySelectorAll('.sub-row-del').forEach(b => {
-      b.addEventListener('click', () => {
-        state.substances.splice(parseInt(b.dataset.i, 10), 1);
-        saveState(); renderSubsList(); renderWater();
-      });
-    });
-  }
-
-  // Substance search
-  $('subSearch').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    const results = $('subResults');
-    if (!q) { results.classList.remove('show'); results.innerHTML = ''; return; }
-    const matches = SUBSTANCE_DB.filter(s =>
-      s.name.toLowerCase().includes(q) || s.cat.toLowerCase().includes(q)
-    ).slice(0, 8);
-    if (!matches.length) {
-      results.innerHTML = '<div class="search-result"><span class="search-result-name">No matches</span><span class="search-result-meta">Try a different name or category</span></div>';
-      results.classList.add('show');
-      return;
-    }
-    results.innerHTML = matches.map(s => {
-      const defaultExtra = (s.defaultDose || 0) * (s.mlPerUnit || 0);
-      return '<div class="search-result" data-id="' + s.id + '">'
-        + '<span class="search-result-name">' + escape(s.name) + ' <span class="search-result-add">+</span></span>'
-        + '<span class="search-result-meta">' + escape(s.cat) + ' · ' + s.defaultDose + ' ' + escape(s.unit) + ' default → adds ~' + fmtMl(defaultExtra) + '/day · ' + escape(s.note) + '</span>'
-        + '</div>';
-    }).join('');
-    results.classList.add('show');
-    results.querySelectorAll('.search-result').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.dataset.id;
-        const sub = SUBSTANCE_DB.find(x => x.id === id);
-        if (!sub) return;
-        if ((state.substances || []).find(x => x.id === id)) { alert('Already added — edit the dose below.'); return; }
-        state.substances.push({
-          id: sub.id, name: sub.name, cat: sub.cat,
-          unit: sub.unit, mlPerUnit: sub.mlPerUnit,
-          defaultDose: sub.defaultDose,
-          dose: sub.defaultDose
-        });
-        saveState();
-        $('subSearch').value = '';
-        results.classList.remove('show');
-        renderSubsList(); renderWater();
-      });
-    });
-  });
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.search-wrap')) $('subResults').classList.remove('show');
   });
 
   $('settingsBtn').addEventListener('click', () => {
