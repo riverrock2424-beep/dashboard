@@ -28,9 +28,22 @@
   background: #0a0a0b;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  /* Pills no longer shrink to fit — instead the bar scrolls horizontally
+     so nothing (like the water ml count) ever gets clipped on a narrow
+     phone. touch-action must be set here explicitly: the global mobile
+     lockdown below restricts <html> to pan-y (vertical-only, to block
+     pinch-zoom), which would otherwise block the horizontal swipe too. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
 }
+.topbar::-webkit-scrollbar { display: none; }
 .topbar-pill {
-  flex: 1 1 0; min-width: 0;
+  flex: 0 0 auto; min-width: 116px;
+  scroll-snap-align: start;
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.04);
@@ -70,7 +83,8 @@
   white-space: nowrap;
 }
 .topbar-water-wrap {
-  flex: 1 1 0; min-width: 0;
+  flex: 0 0 auto; min-width: 148px;
+  scroll-snap-align: start;
   display: flex;
 }
 .topbar-water-pill {
@@ -114,9 +128,6 @@
   .topbar-pill-label { font-size: 9px; letter-spacing: 0.10em; }
   .topbar-pill-count { font-size: 11px; }
   .topbar-water-add { width: 32px; font-size: 16px; }
-}
-@media (max-width: 380px) {
-  .topbar-pill-label { display: none; }
 }
 
 /* === Global mobile lockdown ===
