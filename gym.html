@@ -565,6 +565,20 @@ img, video, canvas, svg { max-width: 100%; }
   -webkit-tap-highlight-color: transparent;
 }
 .po-hist-del:hover { color: var(--bad); }
+.po-day-detail-ex { margin-bottom: 16px; }
+.po-day-detail-ex:last-child { margin-bottom: 0; }
+.po-day-detail-ex-name {
+  font-size: 13.5px; font-weight: 700; color: var(--text-1); margin-bottom: 2px;
+}
+.po-day-detail-ex-meta { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+.po-day-detail-set-row {
+  display: grid; grid-template-columns: 26px 1fr; gap: 10px;
+  padding: 6px 4px; align-items: center;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.po-day-detail-set-row:last-child { border-bottom: none; }
+.po-day-detail-set-num { font-size: 11px; font-weight: 700; color: var(--text-3); }
 
 /* ----- Modals ----- */
 .po-modal-bg {
@@ -898,7 +912,9 @@ img, video, canvas, svg { max-width: 100%; }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
+  cursor: pointer;
 }
+.po-tw-past-day:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.16); }
 .po-tw-past-day-h {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px;
@@ -1766,6 +1782,19 @@ img, video, canvas, svg { max-width: 100%; }
   </div>
 </div>
 
+<!-- Past Workout Detail Modal — exact sets logged on a past day, opened by
+     tapping a day in the Past Workouts dropdown. -->
+<div class="po-modal-bg" id="dayDetailModalBg">
+  <div class="po-modal">
+    <h3 id="dayDetailTitle">Workout</h3>
+    <div class="po-tw-past-day-summary" id="dayDetailSummary" style="margin:-6px 0 14px; font-size:12.5px; color:var(--text-3);"></div>
+    <div id="dayDetailList"></div>
+    <div class="po-modal-actions">
+      <button class="po-btn-primary" id="dayDetailClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Rotation editor modal -->
 <div class="po-modal-bg" id="rotModalBg">
   <div class="po-modal">
@@ -2147,6 +2176,11 @@ img, video, canvas, svg { max-width: 100%; }
       const rowCount = Math.max(baseCount + extra, todayLogs.length);
       const target = computeSetTarget(ex, logs);
       const lastToday = todayLogs[todayLogs.length - 1];
+      // Pending rows prefill with what you actually last did, not the
+      // suggested next step — the rx line above is where progression is
+      // suggested; the input fields shouldn't silently assume you'll hit it.
+      const lastEver = logs.length ? logs[logs.length - 1] : null;
+      const firstDefined = (...vals) => vals.find(v => v != null);
 
       const colLabels = ex.unilateral
         ? (ex.bw ? '' : '<span class="po-ses-col">Weight</span>') + '<span class="po-ses-col">L reps</span>' + '<span class="po-ses-col">R reps</span>'
@@ -2158,13 +2192,16 @@ img, video, canvas, svg { max-width: 100%; }
         const done = findSetLog(todayLogs, i);
         const isExtraRow = i >= baseCount;
         const isLastRow = i === rowCount - 1;
-        const baseW = done ? done.weight : (lastToday ? lastToday.weight : target.weight);
+        const baseW = done ? done.weight : firstDefined(lastToday && lastToday.weight, lastEver && lastEver.weight, target.weight);
+        const prefillReps = firstDefined(lastToday && lastToday.reps, lastEver && lastEver.reps, target.reps);
+        const prefillRepsL = firstDefined(lastToday && lastToday.repsL, lastEver && lastEver.repsL, target.reps);
+        const prefillRepsR = firstDefined(lastToday && lastToday.repsR, lastEver && lastEver.repsR, target.reps);
         const inputs = ex.unilateral
           ? (ex.bw ? '' : '<input type="number" step="0.5" class="po-ses-w" value="' + baseW + '">')
-            + '<input type="number" class="po-ses-rl" value="' + (done ? (done.repsL || 0) : target.reps) + '" placeholder="L">'
-            + '<input type="number" class="po-ses-rr" value="' + (done ? (done.repsR || 0) : target.reps) + '" placeholder="R">'
+            + '<input type="number" class="po-ses-rl" value="' + (done ? (done.repsL || 0) : prefillRepsL) + '" placeholder="L">'
+            + '<input type="number" class="po-ses-rr" value="' + (done ? (done.repsR || 0) : prefillRepsR) + '" placeholder="R">'
           : (ex.bw ? '' : '<input type="number" step="0.5" class="po-ses-w" value="' + baseW + '">')
-            + '<input type="number" class="po-ses-r" value="' + (done ? (done.reps || 0) : target.reps) + '" placeholder="reps">';
+            + '<input type="number" class="po-ses-r" value="' + (done ? (done.reps || 0) : prefillReps) + '" placeholder="reps">';
         const delBtn = (isExtraRow && isLastRow)
           ? '<button type="button" class="po-ses-set-del" data-action="delset" aria-label="Delete set" title="Delete this set">&times;</button>'
           : '';
@@ -2630,7 +2667,7 @@ img, video, canvas, svg { max-width: 100%; }
       const isDone = !!doneDays[dk];
       const exNames = sum.perEx.map(e => e.ex.name).slice(0, 3).join(', ')
         + (sum.perEx.length > 3 ? '…' : '');
-      return '<div class="po-tw-past-day">'
+      return '<div class="po-tw-past-day" data-day="' + dk + '">'
         + '<div class="po-tw-past-day-h">'
         +   '<span class="po-tw-past-day-date">' + fmtPastDate(dk) + '</span>'
         +   '<span class="po-tw-past-day-summary">'
@@ -2644,6 +2681,42 @@ img, video, canvas, svg { max-width: 100%; }
         + '</div>';
     }).join('');
   }
+
+  // Past-workout detail modal — exact sets logged on a given past day,
+  // grouped by exercise, opened by tapping a day in the dropdown.
+  function renderDayDetail(dk, sets) {
+    const sum = summarizeDay(sets);
+    const u = state.units;
+    $('dayDetailTitle').textContent = fmtPastDate(dk);
+    $('dayDetailSummary').textContent = sum.totalSets + ' sets · ' + Math.round(sum.totalVol).toLocaleString() + ' ' + u + ' lifted'
+      + (doneDays[dk] ? ' · Done' : '');
+    $('dayDetailList').innerHTML = sum.perEx.map(e => {
+      const setsHtml = e.sets.map((log, i) => {
+        const setStr = e.ex.bw ? (logRepsDisplay(log) + ' reps') : (log.weight + u + ' &times; ' + logRepsDisplay(log));
+        return '<div class="po-day-detail-set-row">'
+          + '<span class="po-day-detail-set-num">' + (i + 1) + '</span>'
+          + '<span>' + setStr + '</span>'
+          + '</div>';
+      }).join('');
+      const top = e.ex.bw
+        ? 'top ' + Math.max.apply(null, e.sets.map(s => logEffectiveReps(s))) + ' reps'
+        : 'top ' + Math.max.apply(null, e.sets.map(s => s.weight)) + u;
+      return '<div class="po-day-detail-ex">'
+        + '<div class="po-day-detail-ex-name">' + escape(e.ex.name) + '</div>'
+        + '<div class="po-day-detail-ex-meta">' + e.sets.length + ' set' + (e.sets.length === 1 ? '' : 's') + ' &middot; ' + top + '</div>'
+        + setsHtml
+        + '</div>';
+    }).join('');
+    $('dayDetailModalBg').classList.add('show');
+  }
+  $('poTwPastBody').addEventListener('click', (e) => {
+    const dayEl = e.target.closest('.po-tw-past-day');
+    if (!dayEl) return;
+    const dk = dayEl.dataset.day;
+    const sets = logsByDay()[dk] || [];
+    renderDayDetail(dk, sets);
+  });
+  $('dayDetailClose').addEventListener('click', () => $('dayDetailModalBg').classList.remove('show'));
 
   $('poTwDoneBtn').addEventListener('click', () => {
     const todayKey = wtDateKey(new Date());
