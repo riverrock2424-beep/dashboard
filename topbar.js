@@ -423,12 +423,23 @@ body.topbar-modal-open {
     document.addEventListener('gesturestart', blockGesture, { passive: false });
     document.addEventListener('gesturechange', blockGesture, { passive: false });
     document.addEventListener('gestureend', blockGesture, { passive: false });
-    // Also kill the iOS double-tap-to-zoom on any tap.
-    let lastTouch = 0;
+    // Kill iOS double-tap-to-zoom — but only for a genuine double-tap on
+    // roughly the same spot. Checking time alone (as this used to) means
+    // ANY two taps anywhere on the page within 300ms — e.g. tapping
+    // "Close" on a modal then tapping a button elsewhere right after —
+    // gets the second tap's default action (and its click) silently
+    // swallowed. Requiring the taps to also be close together in
+    // position is the standard double-tap heuristic and avoids that.
+    let lastTouch = 0, lastX = 0, lastY = 0;
     document.addEventListener('touchend', (e) => {
       const now = Date.now();
-      if (now - lastTouch <= 300) e.preventDefault();
-      lastTouch = now;
+      const touch = e.changedTouches && e.changedTouches[0];
+      const x = touch ? touch.clientX : 0;
+      const y = touch ? touch.clientY : 0;
+      const closeInTime = (now - lastTouch) <= 300;
+      const closeInSpace = Math.abs(x - lastX) < 30 && Math.abs(y - lastY) < 30;
+      if (closeInTime && closeInSpace) e.preventDefault();
+      lastTouch = now; lastX = x; lastY = y;
     }, { passive: false });
   }
 

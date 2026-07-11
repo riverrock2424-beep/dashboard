@@ -454,7 +454,7 @@ img, video, canvas, svg { max-width: 100%; }
 }
 .po-ses-set-inputs { display: flex; gap: 6px; min-width: 0; }
 .po-ses-set-inputs input {
-  width: 100%; min-width: 0;
+  flex: 1; width: 100%; min-width: 0;
   background: rgba(0,0,0,0.28);
   border: 1px solid var(--border);
   color: var(--text-1);
@@ -466,6 +466,17 @@ img, video, canvas, svg { max-width: 100%; }
 .po-ses-set-inputs input::-webkit-outer-spin-button,
 .po-ses-set-inputs input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .po-ses-set-inputs input:focus { border-color: rgba(255,255,255,0.35); }
+.po-ses-set-header {
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+  margin-bottom: 6px;
+}
+.po-ses-set-header .po-ses-set-inputs { display: flex; gap: 6px; }
+.po-ses-col {
+  flex: 1; text-align: center;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-3);
+}
+.po-ses-set-header-spacer { width: 34px; }
 .po-ses-set-check {
   width: 34px; height: 34px; flex-shrink: 0;
   border-radius: 9px; border: 1px solid var(--border);
@@ -636,6 +647,22 @@ img, video, canvas, svg { max-width: 100%; }
   display: block; margin-top: 2px;
   font-size: 11px; font-weight: 500; color: var(--text-3);
 }
+.po-swap-hint {
+  font-size: 11px; color: var(--text-3); font-style: italic;
+  margin: -6px 0 10px;
+}
+
+/* ----- Replacement-exercise checklist (Add/Edit Exercise modal) ----- */
+.po-replacement-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px; color: var(--text-1); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.po-replacement-row input { flex-shrink: 0; }
 .po-add-row-btn {
   width: 100%; margin-top: 6px;
   padding: 10px; background: rgba(255,255,255,0.025);
@@ -1632,6 +1659,13 @@ img, video, canvas, svg { max-width: 100%; }
         <input type="number" id="exTargetSets" min="1" max="10" step="1" value="3">
       </div>
     </div>
+    <div class="po-field">
+      <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Replacement exercises</label>
+      <div style="font-size:11px;color:var(--text-3);margin:-4px 0 8px;line-height:1.4;">
+        Only these show up when you tap Swap on this exercise (e.g. a similar curl variation, not a leg press). Leave empty to allow swapping with anything.
+      </div>
+      <div class="po-set-list" id="exReplacements" style="max-height:160px;overflow-y:auto"></div>
+    </div>
     <div class="po-modal-actions">
       <button class="po-btn-secondary" id="exModalCancel">Cancel</button>
       <button class="po-btn-primary" id="exModalSave">Save</button>
@@ -1651,6 +1685,7 @@ img, video, canvas, svg { max-width: 100%; }
     <div id="swapRevertRow" style="display:none;margin-bottom:14px;">
       <button class="po-btn-secondary" id="swapRevertBtn" style="width:100%">&larr; Revert to <span id="swapRevertName"></span></button>
     </div>
+    <div class="po-swap-hint" id="swapHint" style="display:none"></div>
     <div class="po-field">
       <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Replace with</label>
       <div class="po-set-list" id="swapOptions"></div>
@@ -2018,6 +2053,11 @@ img, video, canvas, svg { max-width: 100%; }
       const target = computeSetTarget(ex, logs);
       const lastToday = todayLogs[todayLogs.length - 1];
 
+      const colLabels = ex.unilateral
+        ? (ex.bw ? '' : '<span class="po-ses-col">Weight</span>') + '<span class="po-ses-col">L reps</span>' + '<span class="po-ses-col">R reps</span>'
+        : (ex.bw ? '' : '<span class="po-ses-col">Weight</span>') + '<span class="po-ses-col">Reps</span>';
+      const headerHtml = '<div class="po-ses-set-header"><span></span><div class="po-ses-set-inputs">' + colLabels + '</div><span class="po-ses-set-header-spacer"></span></div>';
+
       let setsHtml = '';
       for (let i = 0; i < rowCount; i++) {
         const done = todayLogs[i];
@@ -2031,7 +2071,7 @@ img, video, canvas, svg { max-width: 100%; }
         setsHtml += '<div class="po-ses-set-row' + (done ? ' is-done' : '') + '" data-set="' + i + '">'
           + '<span class="po-ses-set-label">' + (i + 1) + '</span>'
           + '<div class="po-ses-set-inputs">' + inputs + '</div>'
-          + '<button type="button" class="po-ses-set-check" data-action="log" aria-label="Log set">' + (done ? '&#10003;' : '&#43;') + '</button>'
+          + '<button type="button" class="po-ses-set-check" data-action="log" aria-label="' + (done ? 'Untick set' : 'Log set') + '" title="' + (done ? 'Tap to untick' : 'Tap to log') + '">' + (done ? '&#10003;' : '&#43;') + '</button>'
           + '</div>';
       }
 
@@ -2042,11 +2082,13 @@ img, video, canvas, svg { max-width: 100%; }
         +     (ex._swappedFrom ? '<span class="po-ses-swapped-tag">swapped from ' + escape(ex._swappedFrom) + '</span>' : '')
         +   '</div>'
         +   '<div class="po-ses-actions">'
+        +     '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit exercise" aria-label="Edit exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="history" title="History" aria-label="History"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="swap" title="Swap exercise" aria-label="Swap exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>'
         +   '</div>'
         + '</div>'
         + '<div class="po-ses-rx-line">' + rxLineHTML(ex, logs) + '</div>'
+        + headerHtml
         + '<div class="po-ses-sets">' + setsHtml + '</div>'
         + '<button type="button" class="po-ses-add-set" data-action="addset">+ Add set</button>'
         + '</div>';
@@ -2063,6 +2105,9 @@ img, video, canvas, svg { max-width: 100%; }
     const ex = state.exercises.find(x => x.id === exId);
     if (!ex) return;
 
+    const editBtn = e.target.closest('[data-action="edit"]');
+    if (editBtn) { openExModal('edit', ex); return; }
+
     const historyBtn = e.target.closest('[data-action="history"]');
     if (historyBtn) { openHistoryModal(exId); return; }
 
@@ -2076,33 +2121,37 @@ img, video, canvas, svg { max-width: 100%; }
     if (logBtn) {
       const row = logBtn.closest('.po-ses-set-row');
       const setIdx = parseInt(row.dataset.set, 10);
-      const wInput = row.querySelector('.po-ses-w');
-      const weight = ex.bw ? 0 : (parseFloat(wInput ? wInput.value : 0) || 0);
-      if (!ex.bw && weight <= 0) { alert('Enter a weight.'); return; }
-      let entry;
-      if (ex.unilateral) {
-        const repsL = parseInt(row.querySelector('.po-ses-rl').value, 10) || 0;
-        const repsR = parseInt(row.querySelector('.po-ses-rr').value, 10) || 0;
-        if (repsL <= 0 && repsR <= 0) { alert('Enter reps for at least one side.'); return; }
-        entry = { weight, repsL, repsR, unilateral: true };
-      } else {
-        const reps = parseInt(row.querySelector('.po-ses-r').value, 10) || 0;
-        if (reps <= 0) { alert('Enter reps.'); return; }
-        entry = { weight, reps };
-      }
       const todayLogs = todaysLogsFor(exId);
       const existing = todayLogs[setIdx];
-      const arr = state.logs[exId] || [];
+
       if (existing) {
-        // Idempotent: re-tapping an already-logged set updates it in place
-        // instead of creating a duplicate entry.
+        // Already logged — tapping again unticks it back to pending
+        // rather than re-saving, so a mistaken tap (or a set you want to
+        // redo) can be undone without deleting through the History modal.
+        const arr = state.logs[exId] || [];
         const origIdx = arr.indexOf(existing);
-        arr[origIdx] = Object.assign({}, existing, entry);
+        if (origIdx !== -1) arr.splice(origIdx, 1);
+        if (!arr.length) delete state.logs[exId]; else state.logs[exId] = arr;
       } else {
+        const wInput = row.querySelector('.po-ses-w');
+        const weight = ex.bw ? 0 : (parseFloat(wInput ? wInput.value : 0) || 0);
+        if (!ex.bw && weight <= 0) { alert('Enter a weight.'); return; }
+        let entry;
+        if (ex.unilateral) {
+          const repsL = parseInt(row.querySelector('.po-ses-rl').value, 10) || 0;
+          const repsR = parseInt(row.querySelector('.po-ses-rr').value, 10) || 0;
+          if (repsL <= 0 && repsR <= 0) { alert('Enter reps for at least one side.'); return; }
+          entry = { weight, repsL, repsR, unilateral: true };
+        } else {
+          const reps = parseInt(row.querySelector('.po-ses-r').value, 10) || 0;
+          if (reps <= 0) { alert('Enter reps.'); return; }
+          entry = { weight, reps };
+        }
         entry.date = new Date().toISOString();
+        const arr = state.logs[exId] || [];
         arr.push(entry);
+        state.logs[exId] = arr;
       }
-      state.logs[exId] = arr;
       saveState();
       renderSession();
       renderTodaysWorkout();
@@ -2245,7 +2294,18 @@ img, video, canvas, svg { max-width: 100%; }
     } else {
       revertRow.style.display = 'none';
     }
-    const options = state.exercises.filter(e => e.id !== originalId);
+    const configuredIds = Array.isArray(original.replacementIds) ? original.replacementIds : [];
+    const configured = configuredIds.map(id => state.exercises.find(e => e.id === id)).filter(Boolean);
+    const hint = $('swapHint');
+    let options;
+    if (configured.length) {
+      options = configured;
+      hint.style.display = 'none';
+    } else {
+      options = state.exercises.filter(e => e.id !== originalId);
+      hint.style.display = options.length ? '' : 'none';
+      hint.textContent = 'No replacements configured for ' + original.name + ' yet — showing every exercise. Add some via Edit so this list only shows relevant swaps.';
+    }
     $('swapOptions').innerHTML = options.map(e =>
       '<button type="button" class="po-swap-option" data-id="' + e.id + '">' + escape(e.name)
       + '<span class="po-swap-option-meta">' + dayName(e.day) + (e.bw ? ' · BW' : '') + '</span></button>'
@@ -2617,6 +2677,7 @@ img, video, canvas, svg { max-width: 100%; }
   // ============================================================
   let editingExId = null;
   let modalDay = null;
+  let modalReplacementIds = [];
   function renderModalSegs() {
     $('exDaySeg').innerHTML = state.days.map(d =>
       '<button data-day="' + d.id + '" class="' + (modalDay === d.id ? 'active' : '') + '">' + escape(d.name) + '</button>'
@@ -2626,6 +2687,27 @@ img, video, canvas, svg { max-width: 100%; }
         modalDay = b.dataset.day;
         $('exDaySeg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
+      });
+    });
+  }
+  function renderModalReplacements() {
+    const others = state.exercises.filter(e => e.id !== editingExId);
+    const wrap = $('exReplacements');
+    if (!others.length) {
+      wrap.innerHTML = '<div class="po-empty">Add other exercises first to link replacements.</div>';
+      return;
+    }
+    wrap.innerHTML = others.map(e =>
+      '<label class="po-replacement-row">'
+      + '<input type="checkbox" data-id="' + e.id + '"' + (modalReplacementIds.indexOf(e.id) !== -1 ? ' checked' : '') + '>'
+      + escape(e.name) + ' <span style="color:var(--text-3)">&middot; ' + dayName(e.day) + '</span>'
+      + '</label>'
+    ).join('');
+    wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.id;
+        if (cb.checked) { if (modalReplacementIds.indexOf(id) === -1) modalReplacementIds.push(id); }
+        else { modalReplacementIds = modalReplacementIds.filter(x => x !== id); }
       });
     });
   }
@@ -2643,6 +2725,7 @@ img, video, canvas, svg { max-width: 100%; }
       $('exRepMax').value = ex.repMax;
       $('exStep').value = ex.step;
       $('exTargetSets').value = ex.targetSets || 3;
+      modalReplacementIds = Array.isArray(ex.replacementIds) ? ex.replacementIds.slice() : [];
     } else {
       $('exName').value = '';
       modalDay = state.filterDay;
@@ -2653,8 +2736,10 @@ img, video, canvas, svg { max-width: 100%; }
       $('exRepMax').value = 8;
       $('exStep').value = 2.5;
       $('exTargetSets').value = 3;
+      modalReplacementIds = [];
     }
     renderModalSegs();
+    renderModalReplacements();
     toggleBwFields();
     $('exModalBg').classList.add('show');
     setTimeout(() => $('exName').focus(), 60);
@@ -2681,19 +2766,29 @@ img, video, canvas, svg { max-width: 100%; }
       startWeight: isBw ? 0 : (parseFloat($('exStartWeight').value) || 0),
       repMin, repMax,
       step: isBw ? 1 : (parseFloat($('exStep').value) || 2.5),
-      targetSets: Math.max(1, parseInt($('exTargetSets').value, 10) || 3)
+      targetSets: Math.max(1, parseInt($('exTargetSets').value, 10) || 3),
+      replacementIds: modalReplacementIds.slice()
     };
+    let savedExId;
     if (editingExId) {
       const ex = state.exercises.find(e => e.id === editingExId);
       if (ex) Object.assign(ex, data);
+      savedExId = editingExId;
     } else {
       const ex = Object.assign({ id: uid() }, data);
       state.exercises.push(ex);
       state.filterDay = modalDay;
+      savedExId = ex.id;
       // If this exercise was added via "Swap → add new exercise instead",
-      // wire it in as today's replacement right away.
+      // wire it in as today's replacement right away, and remember it as
+      // a configured replacement for next time too.
       if (swapPendingOriginalId) {
         setSwap(swapPendingOriginalId, ex.id);
+        const original = state.exercises.find(e => e.id === swapPendingOriginalId);
+        if (original) {
+          original.replacementIds = Array.isArray(original.replacementIds) ? original.replacementIds : [];
+          if (original.replacementIds.indexOf(ex.id) === -1) original.replacementIds.push(ex.id);
+        }
         swapPendingOriginalId = null;
       }
     }
