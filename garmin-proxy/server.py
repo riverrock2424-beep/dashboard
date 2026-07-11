@@ -120,7 +120,18 @@ def debug_raw():
         "sleep": safe(lambda: client.get_sleep_data(today)),
         "bodyBattery": safe(lambda: client.get_body_battery(today, today)),
         "hrv": safe(lambda: client.get_hrv_data(today)),
+        "heartRate": safe(lambda: client.get_heart_rates(today)),
     })
+
+
+def humanize_enum(s):
+    """Garmin's coaching endpoints return SCREAMING_SNAKE_CASE codes like
+    'HIGHLY_INCREASED' or 'NEGATIVE_LATE_EXERCISE'. Turn them into readable
+    text without maintaining an exhaustive lookup table for every code
+    Garmin might ever send."""
+    if not s or not isinstance(s, str):
+        return None
+    return s.replace('_', ' ').capitalize()
 
 
 def non_negative(v):
@@ -151,6 +162,59 @@ def extract_body_battery(entries):
     return None
 
 
+def extract_heart_rate(raw):
+    """`get_heart_rates` isn't covered by the typed accessor, so this reads
+    the raw dict directly. `heartRateValues` is a list of
+    [timestamp_ms, bpm_or_null] samples through the day — confirmed by
+    inspecting a live response, since this endpoint isn't documented."""
+    if not raw or not isinstance(raw, dict):
+        return None
+    points = [
+        [p[0], p[1]] for p in (raw.get('heartRateValues') or [])
+        if isinstance(p, list) and len(p) > 1 and p[1] is not None
+    ]
+    return {
+        "points": points,
+        "resting": non_negative(raw.get('restingHeartRate')),
+        "min": non_negative(raw.get('minHeartRate')),
+        "max": non_negative(raw.get('maxHeartRate')),
+    }
+
+
+def extract_sleep_coach(dto):
+    """Garmin's actual Sleep Coach recommendation. Not exposed as a typed
+    field (DailySleepDTO doesn't declare it), but it rides along in the same
+    response under dailySleepDTO.nextSleepNeed / .sleepNeed — recovered here
+    via pydantic's `model_extra` (this model's config uses extra='allow').
+    nextSleepNeed is Garmin's forward-looking "tonight" recommendation;
+    sleepNeed (last night's) is the fallback if that's ever missing."""
+    if not dto:
+        return None
+    extra = dto.model_extra or {}
+    need = extra.get('nextSleepNeed') or extra.get('sleepNeed')
+    if not need:
+        return None
+
+    adjustments = []
+    for key, label in (
+        ('trainingFeedback', 'Training'),
+        ('sleepHistoryAdjustment', 'Sleep history'),
+        ('hrvAdjustment', 'HRV'),
+        ('napAdjustment', 'Naps'),
+    ):
+        val = need.get(key)
+        if val and val not in ('NO_CHANGE', 'NO_DATA'):
+            adjustments.append(label + ': ' + humanize_enum(val))
+
+    return {
+        "recommendedMin": need.get('actual'),
+        "baselineMin": need.get('baseline'),
+        "feedback": humanize_enum(need.get('feedback')),
+        "adjustments": adjustments,
+        "scoreInsight": humanize_enum(extra.get('sleepScoreInsight')),
+    }
+
+
 @app.route("/garmin-data")
 def garmin_data():
     try:
@@ -165,6 +229,7 @@ def garmin_data():
     sleep = safe(lambda: typed.get_sleep_data(today))
     body_battery_entries = safe(lambda: typed.get_body_battery(today, today)) or []
     hrv = safe(lambda: typed.get_hrv_data(today))
+    heart_rate_raw = safe(lambda: client.get_heart_rates(today))
 
     dto = sleep.daily_sleep_dto if sleep and sleep.daily_sleep_dto else None
     sleep_score = (
@@ -196,6 +261,8 @@ def garmin_data():
         "steps": non_negative(stats.total_steps if stats else None) or 0,
         "stepGoal": non_negative(stats.daily_step_goal if stats else None) or 0,
         "caloriesBurned": non_negative(stats.total_kilocalories if stats else None) or 0,
+        "heartRate": extract_heart_rate(heart_rate_raw),
+        "sleepCoach": extract_sleep_coach(dto),
         "updatedAt": datetime.datetime.now().isoformat(),
     }
     return jsonify(payload)
