@@ -2067,6 +2067,11 @@ img, video, canvas, svg { max-width: 100%; }
     return d ? d.name : id;
   }
   function estimate1RM(w, r) { if (r < 2) return w; return w * (1 + r / 30); }
+  // Dumbbell-pair exercises store the PER-DUMBBELL weight, but both are
+  // moved at once — anywhere "true load lifted" matters (volume, 1RM
+  // estimate) needs this; progression/rx suggestions deliberately don't,
+  // since you shop for dumbbells one pair at a time.
+  function loadMultiplier(ex) { return (ex && ex.dumbbellPair) ? 2 : 1; }
   function roundToStep(v, s) { return Math.round(v / s) * s; }
   function todayKeyStr() {
     const d = new Date();
@@ -2086,14 +2091,15 @@ img, video, canvas, svg { max-width: 100%; }
     if (log.unilateral) return Math.min(log.repsL || 0, log.repsR || 0);
     return log.reps || 0;
   }
-  function logVolume(log) {
+  function logVolume(log, ex) {
     const reps = log.unilateral ? (log.repsL || 0) + (log.repsR || 0) : (log.reps || 0);
-    let vol = (log.weight || 0) * reps;
+    const mult = loadMultiplier(ex);
+    let vol = (log.weight || 0) * reps * mult;
     // Myo-reps/lengthened-partial extras don't track their own weight —
     // they're done at the same weight as the main set, unlike drop sets.
     if (log.extra) {
       const extraWeight = log.extra.weight != null ? log.extra.weight : log.weight;
-      vol += (extraWeight || 0) * (log.extra.reps || 0);
+      vol += (extraWeight || 0) * (log.extra.reps || 0) * mult;
     }
     return vol;
   }
@@ -2555,17 +2561,18 @@ img, video, canvas, svg { max-width: 100%; }
       $('histSessionCount').textContent = '—';
       return;
     }
+    const mult = loadMultiplier(ex);
     if (ex.bw) {
       const br = Math.max.apply(null, logs.map(l => logEffectiveReps(l)));
       $('histOneRm').innerHTML = br + '<span class="po-unit">reps</span>';
     } else {
-      const orm = Math.max.apply(null, logs.map(l => estimate1RM(l.weight, logEffectiveReps(l))));
+      const orm = Math.max.apply(null, logs.map(l => estimate1RM(l.weight * mult, logEffectiveReps(l))));
       $('histOneRm').innerHTML = Math.round(orm) + '<span class="po-unit">' + unit() + '</span>';
     }
     let best = logs[0];
     logs.forEach(l => {
-      const cur = ex.bw ? logEffectiveReps(l) : estimate1RM(l.weight, logEffectiveReps(l));
-      const bestVal = ex.bw ? logEffectiveReps(best) : estimate1RM(best.weight, logEffectiveReps(best));
+      const cur = ex.bw ? logEffectiveReps(l) : estimate1RM(l.weight * mult, logEffectiveReps(l));
+      const bestVal = ex.bw ? logEffectiveReps(best) : estimate1RM(best.weight * mult, logEffectiveReps(best));
       if (cur > bestVal) best = l;
     });
     $('histBestSet').textContent = ex.bw ? (logEffectiveReps(best) + 'r') : ((ex.dumbbellPair ? '2×' : '') + best.weight + '×' + logRepsDisplay(best));
@@ -2580,7 +2587,8 @@ img, video, canvas, svg { max-width: 100%; }
       return;
     }
     svg.style.display = 'block'; empty.style.display = 'none';
-    const vals = recent.map(l => ex.bw ? logEffectiveReps(l) : estimate1RM(l.weight, logEffectiveReps(l)));
+    const sparkMult = loadMultiplier(ex);
+    const vals = recent.map(l => ex.bw ? logEffectiveReps(l) : estimate1RM(l.weight * sparkMult, logEffectiveReps(l)));
     const min = Math.min.apply(null, vals);
     const max = Math.max.apply(null, vals);
     const range = max - min || 1;
@@ -2801,7 +2809,7 @@ img, video, canvas, svg { max-width: 100%; }
     daySets.forEach(({ex, log}) => {
       if (!byEx[ex.id]) byEx[ex.id] = { ex, sets: [], vol: 0 };
       byEx[ex.id].sets.push(log);
-      byEx[ex.id].vol += logVolume(log);
+      byEx[ex.id].vol += logVolume(log, ex);
     });
     const perEx = Object.values(byEx);
     const totalSets = perEx.reduce((s, e) => s + e.sets.length, 0);
@@ -3737,12 +3745,13 @@ img, video, canvas, svg { max-width: 100%; }
     let totalVolumeInWindow = 0;
     state.exercises.forEach(ex => {
       const logs = (state.logs[ex.id] || []).slice();
+      const mult = loadMultiplier(ex);
       if (logs.length < 2 || ex.bw) {
         // Still count volume / sessions even for bodyweight + sparse exercises
         logs.forEach(l => {
           if (new Date(l.date) >= start) {
             workoutDays.add(l.date.slice(0, 10));
-            totalVolumeInWindow += (l.weight || 0) * (l.reps || 0);
+            totalVolumeInWindow += (l.weight || 0) * (l.reps || 0) * mult;
           }
         });
         return;
@@ -3751,10 +3760,10 @@ img, video, canvas, svg { max-width: 100%; }
       const before = logs.filter(l => new Date(l.date) < start);
       inWin.forEach(l => {
         workoutDays.add(l.date.slice(0, 10));
-        totalVolumeInWindow += (l.weight || 0) * (l.reps || 0);
+        totalVolumeInWindow += (l.weight || 0) * (l.reps || 0) * mult;
       });
       if (!inWin.length || !before.length) return;
-      const avg = arr => arr.reduce((s, l) => s + estimate1RM(l.weight, l.reps), 0) / arr.length;
+      const avg = arr => arr.reduce((s, l) => s + estimate1RM(l.weight * mult, l.reps), 0) / arr.length;
       const a = avg(before), b = avg(inWin);
       if (a <= 0) return;
       strengthRatios.push(b / a);
