@@ -453,6 +453,7 @@ img, video, canvas, svg { max-width: 100%; }
 }
 .po-ses-rx-line .po-accent { color: var(--good); font-weight: 700; }
 .po-reprange { color: var(--text-3); font-size: 11.5px; }
+.po-ses-rest { color: var(--text-3); font-size: 11.5px; }
 .po-ses-sets { display: flex; flex-direction: column; gap: 8px; }
 .po-ses-set-row {
   display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center;
@@ -1648,7 +1649,6 @@ img, video, canvas, svg { max-width: 100%; }
       </div>
       <div id="sessionBody" style="display:none">
         <div class="po-no-ex" id="noExMsg" style="display:none">No exercises on this day yet. Tap <strong>+</strong> to add one.</div>
-        <div class="po-hidden-hint" id="hiddenHint" style="display:none"></div>
         <div id="sessionList"></div>
       </div>
     </div>
@@ -1733,6 +1733,10 @@ img, video, canvas, svg { max-width: 100%; }
       <input type="checkbox" id="exUnilateral">
       Unilateral (log left/right sides separately)
     </label>
+    <label class="po-bw-toggle">
+      <input type="checkbox" id="exDumbbellPair">
+      Uses a pair of dumbbells (shown as "2 &times; weight")
+    </label>
     <div class="po-field" id="exStartWeightField">
       <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Starting weight</label>
       <input type="number" id="exStartWeight" step="0.5" placeholder="20" value="20">
@@ -1756,6 +1760,10 @@ img, video, canvas, svg { max-width: 100%; }
         <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Target sets</label>
         <input type="number" id="exTargetSets" min="1" max="10" step="1" value="3">
       </div>
+    </div>
+    <div class="po-field">
+      <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Rest between sets (seconds)</label>
+      <input type="number" id="exRestSec" min="0" step="5" placeholder="e.g. 90" value="90">
     </div>
     <div class="po-field">
       <label style="font-size:11px;color:var(--text-3);font-weight:700;letter-spacing:0.04em;text-transform:uppercase">Set style</label>
@@ -1872,10 +1880,25 @@ img, video, canvas, svg { max-width: 100%; }
      which day it's assigned to, with quick Edit/Delete per row. -->
 <div class="po-modal-bg" id="libraryModalBg">
   <div class="po-modal">
-    <h3>Exercise library</h3>
+    <h3 id="libraryModalTitle">Exercise library</h3>
     <div id="libraryList"></div>
     <div class="po-modal-actions">
       <button class="po-btn-secondary" id="libraryClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add-exercise chooser — new exercise, or pull an existing one in from
+     the library instead of creating a duplicate. -->
+<div class="po-modal-bg" id="addChoiceModalBg">
+  <div class="po-modal" style="max-width:340px">
+    <h3>Add exercise</h3>
+    <div class="po-modal-actions" style="flex-direction:column;gap:10px;">
+      <button class="po-btn-primary" id="addChoiceNewBtn" style="width:100%">+ Create new exercise</button>
+      <button class="po-btn-secondary" id="addChoiceLibraryBtn" style="width:100%">From library</button>
+    </div>
+    <div class="po-modal-actions">
+      <button class="po-btn-secondary" id="addChoiceCancel">Cancel</button>
     </div>
   </div>
 </div>
@@ -1988,6 +2011,8 @@ img, video, canvas, svg { max-width: 100%; }
       if (e.targetSets == null) e.targetSets = 3;
       if (e.unilateral == null) e.unilateral = false;
       if (e.setStyle == null) e.setStyle = 'none';
+      if (e.restSec == null) e.restSec = 90;
+      if (e.dumbbellPair == null) e.dumbbellPair = false;
       delete e.gym; // gym concept removed — single-gym users don't need it
     });
     s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};
@@ -1997,10 +2022,6 @@ img, video, canvas, svg { max-width: 100%; }
     // Per-day, per-exercise "extra sets" added via "+ Add set" beyond the
     // exercise's configured targetSets, e.g. { '2026-07-12': { exId: 1 } }.
     s.extraSets = (s.extraSets && typeof s.extraSets === 'object') ? s.extraSets : {};
-    // Per-day exercise ids hidden from that day's session only — the
-    // exercise itself and its day assignment are untouched, so it's back
-    // the next time that day comes around, e.g. { '2026-07-12': [exId] }.
-    s.hidden = (s.hidden && typeof s.hidden === 'object') ? s.hidden : {};
     s.filterDay = s.filterDay || s.days[0].id;
     // Split rotation lives in state so the user can edit it via the pill modal.
     // Stored as a plain array of names (e.g. ["Push", "Pull", "Legs", "Rest"]).
@@ -2040,7 +2061,11 @@ img, video, canvas, svg { max-width: 100%; }
   const $ = (id) => document.getElementById(id);
   function unit() { return state.units; }
   function uid() { return 'ex_' + Date.now() + '_' + Math.floor(Math.random() * 9999); }
-  function dayName(id) { const d = state.days.find(x => x.id === id); return d ? d.name : id; }
+  function dayName(id) {
+    if (!id) return 'Unassigned';
+    const d = state.days.find(x => x.id === id);
+    return d ? d.name : id;
+  }
   function estimate1RM(w, r) { if (r < 2) return w; return w * (1 + r / 30); }
   function roundToStep(v, s) { return Math.round(v / s) * s; }
   function todayKeyStr() {
@@ -2123,27 +2148,16 @@ img, video, canvas, svg { max-width: 100%; }
     saveState();
   }
 
-  // ---- Today-only "remove from session" -----------------------------
-  // Hides an exercise from today's session view without touching its
-  // permanent day assignment or its logs, so it reappears next time
-  // that day comes around (and is untouched on every other day).
-  function getHiddenList() {
-    const k = todayKeyStr();
-    if (!state.hidden[k]) state.hidden[k] = [];
-    return state.hidden[k];
-  }
-  function isHiddenToday(exId) {
-    return getHiddenList().indexOf(exId) !== -1;
-  }
-  function hideFromToday(exId) {
-    const arr = getHiddenList();
-    if (arr.indexOf(exId) === -1) arr.push(exId);
-    saveState();
-  }
-  function unhideFromToday(exId) {
-    const arr = getHiddenList();
-    const idx = arr.indexOf(exId);
-    if (idx !== -1) arr.splice(idx, 1);
+  // ---- Remove exercise from its day (permanent) ----------------------
+  // Clears the exercise's day assignment entirely, so it's gone from that
+  // day for good (not just today) — but the exercise itself, its logs,
+  // and its history all stay intact in the library, reachable again via
+  // the Library modal's Edit button (which lets you assign it to any day,
+  // including back to this one).
+  function removeExerciseFromDay(exId) {
+    const ex = state.exercises.find(e => e.id === exId);
+    if (!ex) return;
+    ex.day = '';
     saveState();
   }
 
@@ -2236,19 +2250,37 @@ img, video, canvas, svg { max-width: 100%; }
     if (rx) return { weight: rx.weight, reps: rx.reps };
     return { weight: ex.startWeight || 0, reps: ex.repMin };
   }
+  function formatRestTime(sec) {
+    if (!sec) return '';
+    if (sec < 60) return sec + 's';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s ? (m + ':' + String(s).padStart(2, '0')) : (m + 'm');
+  }
+  function restSuffixHTML(ex) {
+    return ex.restSec ? ' <span class="po-ses-rest">&middot; &#9201; ' + formatRestTime(ex.restSec) + ' rest</span>' : '';
+  }
+  // Dumbbell-pair exercises store the PER-DUMBBELL weight (matches how
+  // lifters actually think about it — "grab the 12s" — and how progression
+  // steps naturally work, one heavier pair at a time), but that reads as
+  // "12kg total" unless labelled. This is display-only: volume/1RM/rx math
+  // all keep using the stored per-dumbbell number untouched.
+  function weightDisplay(ex, w) {
+    return (ex.dumbbellPair ? '2 &times; ' : '') + w + unit();
+  }
   function rxLineHTML(ex, logs) {
     const rx = getRx(ex, logs);
     const range = ex.repMin + '–' + ex.repMax;
     if (!rx) {
       const head = ex.bw
         ? '<span class="po-accent">' + range + '</span> reps'
-        : '<span class="po-accent">' + (ex.startWeight || 0) + unit() + '</span> &times; ' + range + ' reps';
-      return head + ' &middot; starting point';
+        : '<span class="po-accent">' + weightDisplay(ex, ex.startWeight || 0) + '</span> &times; ' + range + ' reps';
+      return head + ' &middot; starting point' + restSuffixHTML(ex);
     }
     const head = rx.bw
       ? '<span class="po-accent">' + rx.reps + '</span> reps'
-      : '<span class="po-accent">' + rx.weight + unit() + '</span> &times; ' + rx.reps + ' reps';
-    return head + ' <span class="po-reprange">(' + range + ' range)</span>' + ' &middot; ' + escape(rx.tag);
+      : '<span class="po-accent">' + weightDisplay(ex, rx.weight) + '</span> &times; ' + rx.reps + ' reps';
+    return head + ' <span class="po-reprange">(' + range + ' range)</span>' + ' &middot; ' + escape(rx.tag) + restSuffixHTML(ex);
   }
   // Renders the optional extra-intensity add-on row under a completed set,
   // for exercises flagged with a special set style. Empty string if the
@@ -2278,30 +2310,12 @@ img, video, canvas, svg { max-width: 100%; }
   function renderSession() {
     const list = $('sessionList');
     const noMsg = $('noExMsg');
-    const hiddenHint = $('hiddenHint');
-    const allDayExercises = getDayExercises(state.filterDay);
-    const dayExercises = allDayExercises.filter(e => !isHiddenToday(e.id));
-    const hiddenCount = allDayExercises.length - dayExercises.length;
+    const dayExercises = getDayExercises(state.filterDay);
     const countEl = $('sessionCount');
     if (countEl) countEl.textContent = dayExercises.length;
-    if (hiddenHint) {
-      if (hiddenCount > 0) {
-        hiddenHint.style.display = 'block';
-        hiddenHint.innerHTML = hiddenCount + (hiddenCount === 1 ? ' exercise' : ' exercises')
-          + ' removed from today’s session &middot; <button type="button" id="restoreHiddenBtn" class="po-link-btn">Restore</button>';
-        const restoreBtn = $('restoreHiddenBtn');
-        if (restoreBtn) restoreBtn.addEventListener('click', () => {
-          allDayExercises.forEach(e => unhideFromToday(e.id));
-          renderSession();
-        });
-      } else {
-        hiddenHint.style.display = 'none';
-        hiddenHint.innerHTML = '';
-      }
-    }
     if (!dayExercises.length) {
       list.innerHTML = '';
-      noMsg.style.display = hiddenCount > 0 ? 'none' : 'block';
+      noMsg.style.display = 'block';
       return;
     }
     noMsg.style.display = 'none';
@@ -2321,9 +2335,10 @@ img, video, canvas, svg { max-width: 100%; }
       const lastEver = logs.length ? logs[logs.length - 1] : null;
       const firstDefined = (...vals) => vals.find(v => v != null);
 
+      const weightColLabel = ex.dumbbellPair ? 'Weight (&times;2)' : 'Weight';
       const colLabels = ex.unilateral
-        ? (ex.bw ? '' : '<span class="po-ses-col">Weight</span>') + '<span class="po-ses-col">L reps</span>' + '<span class="po-ses-col">R reps</span>'
-        : (ex.bw ? '' : '<span class="po-ses-col">Weight</span>') + '<span class="po-ses-col">Reps</span>';
+        ? (ex.bw ? '' : '<span class="po-ses-col">' + weightColLabel + '</span>') + '<span class="po-ses-col">L reps</span>' + '<span class="po-ses-col">R reps</span>'
+        : (ex.bw ? '' : '<span class="po-ses-col">' + weightColLabel + '</span>') + '<span class="po-ses-col">Reps</span>';
       const headerHtml = '<div class="po-ses-set-header"><span></span><div class="po-ses-set-inputs">' + colLabels + '</div><span class="po-ses-set-header-spacer"></span></div>';
 
       let setsHtml = '';
@@ -2363,7 +2378,7 @@ img, video, canvas, svg { max-width: 100%; }
         +     '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit exercise" aria-label="Edit exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="history" title="History" aria-label="History"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>'
         +     '<button type="button" class="po-ses-icon-btn" data-action="swap" title="Swap exercise" aria-label="Swap exercise"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>'
-        +     '<button type="button" class="po-ses-icon-btn" data-action="remove" title="Remove from today\'s session" aria-label="Remove from today\'s session"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
+        +     '<button type="button" class="po-ses-icon-btn" data-action="remove" title="Remove from this day" aria-label="Remove from this day"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
         +   '</div>'
         + '</div>'
         + '<div class="po-ses-rx-line">' + rxLineHTML(ex, logs) + '</div>'
@@ -2403,9 +2418,9 @@ img, video, canvas, svg { max-width: 100%; }
 
     const removeBtn = e.target.closest('[data-action="remove"]');
     if (removeBtn) {
-      if (!confirm('Remove ' + ex.name + ' from today\'s session? It stays in your exercise library and on any other day — this only skips it for today.')) return;
-      hideFromToday(originalId);
-      renderSession();
+      if (!confirm('Remove ' + ex.name + ' from ' + dayName(state.filterDay) + ' day? It stays saved in your exercise library — you can add it back from there (or to any other day) any time.')) return;
+      removeExerciseFromDay(originalId);
+      renderAll();
       return;
     }
 
@@ -2553,7 +2568,7 @@ img, video, canvas, svg { max-width: 100%; }
       const bestVal = ex.bw ? logEffectiveReps(best) : estimate1RM(best.weight, logEffectiveReps(best));
       if (cur > bestVal) best = l;
     });
-    $('histBestSet').textContent = ex.bw ? (logEffectiveReps(best) + 'r') : (best.weight + '×' + logRepsDisplay(best));
+    $('histBestSet').textContent = ex.bw ? (logEffectiveReps(best) + 'r') : ((ex.dumbbellPair ? '2×' : '') + best.weight + '×' + logRepsDisplay(best));
     $('histSessionCount').textContent = logs.length;
   }
   function renderSparklineFor(ex, logs) {
@@ -2592,7 +2607,7 @@ img, video, canvas, svg { max-width: 100%; }
     wrap.innerHTML = reversed.slice(0, 12).map((l, i) => {
       const d = new Date(l.date);
       const dStr = (d.getMonth() + 1) + '/' + d.getDate();
-      const setStr = (ex.bw ? (logRepsDisplay(l) + ' reps') : (l.weight + unit() + ' × ' + logRepsDisplay(l))) + extraDisplay(l);
+      const setStr = (ex.bw ? (logRepsDisplay(l) + ' reps') : (weightDisplay(ex, l.weight) + ' × ' + logRepsDisplay(l))) + extraDisplay(l);
       const realIdx = reversed.length - 1 - i; // since we reversed
       return '<div class="po-hist-row">'
         + '<div class="po-hist-date">' + dStr + '</div>'
@@ -2883,7 +2898,7 @@ img, video, canvas, svg { max-width: 100%; }
       + (doneDays[dk] ? ' · Done' : '');
     $('dayDetailList').innerHTML = sum.perEx.map(e => {
       const setsHtml = e.sets.map((log, i) => {
-        const setStr = (e.ex.bw ? (logRepsDisplay(log) + ' reps') : (log.weight + u + ' &times; ' + logRepsDisplay(log))) + extraDisplay(log);
+        const setStr = (e.ex.bw ? (logRepsDisplay(log) + ' reps') : (weightDisplay(e.ex, log.weight) + ' &times; ' + logRepsDisplay(log))) + extraDisplay(log);
         return '<div class="po-day-detail-set-row">'
           + '<span class="po-day-detail-set-num">' + (i + 1) + '</span>'
           + '<span>' + setStr + '</span>'
@@ -3136,11 +3151,13 @@ img, video, canvas, svg { max-width: 100%; }
       modalDay = ex.day;
       $('exBw').checked = !!ex.bw;
       $('exUnilateral').checked = !!ex.unilateral;
+      $('exDumbbellPair').checked = !!ex.dumbbellPair;
       $('exStartWeight').value = ex.startWeight || 0;
       $('exRepMin').value = ex.repMin;
       $('exRepMax').value = ex.repMax;
       $('exStep').value = ex.step;
       $('exTargetSets').value = ex.targetSets || 3;
+      $('exRestSec').value = ex.restSec != null ? ex.restSec : 90;
       modalSetStyle = ex.setStyle || 'none';
       modalReplacementIds = Array.isArray(ex.replacementIds) ? ex.replacementIds.slice() : [];
     } else {
@@ -3148,11 +3165,13 @@ img, video, canvas, svg { max-width: 100%; }
       modalDay = state.filterDay;
       $('exBw').checked = false;
       $('exUnilateral').checked = false;
+      $('exDumbbellPair').checked = false;
       $('exStartWeight').value = 20;
       $('exRepMin').value = 6;
       $('exRepMax').value = 8;
       $('exStep').value = 2.5;
       $('exTargetSets').value = 3;
+      $('exRestSec').value = 90;
       modalSetStyle = 'none';
       modalReplacementIds = [];
     }
@@ -3169,7 +3188,6 @@ img, video, canvas, svg { max-width: 100%; }
     $('exStepField').style.display = isBw ? 'none' : '';
   }
   $('exBw').addEventListener('change', toggleBwFields);
-  $('addExBtn').addEventListener('click', () => openExModal('add'));
   $('exModalCancel').addEventListener('click', () => $('exModalBg').classList.remove('show'));
   $('exModalSave').addEventListener('click', () => {
     const name = $('exName').value.trim();
@@ -3182,10 +3200,12 @@ img, video, canvas, svg { max-width: 100%; }
       name, day: modalDay,
       bw: isBw,
       unilateral: $('exUnilateral').checked,
+      dumbbellPair: isBw ? false : $('exDumbbellPair').checked,
       startWeight: isBw ? 0 : (parseFloat($('exStartWeight').value) || 0),
       repMin, repMax,
       step: isBw ? 1 : (parseFloat($('exStep').value) || 2.5),
       targetSets: Math.max(1, parseInt($('exTargetSets').value, 10) || 3),
+      restSec: Math.max(0, parseInt($('exRestSec').value, 10) || 0),
       setStyle: SET_STYLES[modalSetStyle] ? modalSetStyle : 'none',
       replacementIds: modalReplacementIds.slice()
     };
@@ -3239,6 +3259,11 @@ img, video, canvas, svg { max-width: 100%; }
   // with quick Edit/Delete per row. Opened via the book icon next to
   // "+ Add exercise" on the Session card.
   // ============================================================
+  // libraryMode 'manage' = the full library view (Edit/Delete icons, from
+  // the header's Library button). 'pick' = choosing an existing exercise
+  // to add to the currently-selected day (from "+Add exercise" ->
+  // "From library"), showing an Add button per row instead.
+  let libraryMode = 'manage';
   function renderLibrary() {
     const wrap = $('libraryList');
     if (!state.exercises.length) {
@@ -3248,18 +3273,19 @@ img, video, canvas, svg { max-width: 100%; }
     const sorted = state.exercises.slice().sort((a, b) =>
       dayName(a.day).localeCompare(dayName(b.day)) || a.name.localeCompare(b.name)
     );
-    wrap.innerHTML = sorted.map(ex => (
-      '<div class="po-lib-row" data-ex="' + ex.id + '">'
-      + '<div class="po-lib-name-wrap">'
-      +   '<div class="po-lib-name">' + escape(ex.name) + '</div>'
-      +   '<div class="po-lib-meta">' + escape(dayName(ex.day)) + (ex.bw ? ' &middot; bodyweight' : '') + '</div>'
-      + '</div>'
-      + '<div class="po-lib-actions">'
-      +   '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit" aria-label="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
-      +   '<button type="button" class="po-ses-icon-btn" data-action="delete" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>'
-      + '</div>'
-      + '</div>'
-    )).join('');
+    wrap.innerHTML = sorted.map(ex => {
+      const actions = libraryMode === 'pick'
+        ? '<button type="button" class="po-btn-secondary" data-action="pick" style="padding:7px 14px;font-size:12px;">' + (ex.day === state.filterDay ? 'Here' : '+ Add') + '</button>'
+        : '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit" aria-label="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
+          + '<button type="button" class="po-ses-icon-btn" data-action="delete" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
+      return '<div class="po-lib-row" data-ex="' + ex.id + '">'
+        + '<div class="po-lib-name-wrap">'
+        +   '<div class="po-lib-name">' + escape(ex.name) + '</div>'
+        +   '<div class="po-lib-meta">' + escape(dayName(ex.day)) + (ex.bw ? ' &middot; bodyweight' : '') + '</div>'
+        + '</div>'
+        + '<div class="po-lib-actions">' + actions + '</div>'
+        + '</div>';
+    }).join('');
   }
   $('libraryList').addEventListener('click', (e) => {
     const row = e.target.closest('.po-lib-row');
@@ -3267,6 +3293,24 @@ img, video, canvas, svg { max-width: 100%; }
     const exId = row.dataset.ex;
     const ex = state.exercises.find(x => x.id === exId);
     if (!ex) return;
+
+    if (libraryMode === 'pick') {
+      const pickBtn = e.target.closest('[data-action="pick"]');
+      if (!pickBtn) return;
+      if (ex.day === state.filterDay) return; // already on this day, nothing to do
+      const targetDayName = dayName(state.filterDay);
+      if (ex.day) {
+        if (!confirm('Move ' + ex.name + ' from ' + dayName(ex.day) + ' day to ' + targetDayName + ' day?')) return;
+      }
+      ex.day = state.filterDay;
+      saveState();
+      $('libraryModalBg').classList.remove('show');
+      $('sessionBody').style.display = 'block';
+      $('sessionToggle').setAttribute('aria-expanded', 'true');
+      renderAll();
+      return;
+    }
+
     if (e.target.closest('[data-action="edit"]')) {
       $('libraryModalBg').classList.remove('show');
       openExModal('edit', ex);
@@ -3280,10 +3324,26 @@ img, video, canvas, svg { max-width: 100%; }
     }
   });
   $('libraryBtn').addEventListener('click', () => {
+    libraryMode = 'manage';
+    $('libraryModalTitle').textContent = 'Exercise library';
     renderLibrary();
     $('libraryModalBg').classList.add('show');
   });
   $('libraryClose').addEventListener('click', () => $('libraryModalBg').classList.remove('show'));
+
+  $('addExBtn').addEventListener('click', () => $('addChoiceModalBg').classList.add('show'));
+  $('addChoiceCancel').addEventListener('click', () => $('addChoiceModalBg').classList.remove('show'));
+  $('addChoiceNewBtn').addEventListener('click', () => {
+    $('addChoiceModalBg').classList.remove('show');
+    openExModal('add');
+  });
+  $('addChoiceLibraryBtn').addEventListener('click', () => {
+    $('addChoiceModalBg').classList.remove('show');
+    libraryMode = 'pick';
+    $('libraryModalTitle').textContent = 'Add from library to ' + dayName(state.filterDay) + ' day';
+    renderLibrary();
+    $('libraryModalBg').classList.add('show');
+  });
 
   // ============================================================
   // ROTATION EDITOR (tap the day pill)
