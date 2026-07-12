@@ -368,6 +368,118 @@ def ai_summary():
         return jsonify({"error": str(e)}), 500
 
 
+FOOD_JSON_INSTRUCTIONS = (
+    'Return ONLY a JSON object with these exact keys: "name" (string, short '
+    'food description), "calories" (number, kcal), "protein" (number, grams), '
+    '"fat" (number, grams), "carbs" (number, grams). No markdown code fences, '
+    "no explanation, no extra text — just the JSON object. If multiple food "
+    "items are described or shown, estimate the combined total for the whole "
+    "meal/plate."
+)
+
+
+def parse_food_json(text):
+    """Gemini sometimes wraps JSON in markdown fences despite instructions
+    not to — strip those before parsing."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.lower().startswith("json"):
+            text = text[4:]
+    return json.loads(text.strip())
+
+
+def call_gemini_food(parts):
+    """Shared call for both /food-lookup and /food-analyze — sends `parts`
+    (text and/or inline_data image parts) to Gemini and normalizes the
+    response into the {name, calories, protein, fat, carbs} shape the
+    frontend expects, or {error: ...} on failure."""
+    body = json.dumps({
+        "contents": [{"parts": parts}],
+        "generationConfig": {"maxOutputTokens": 300},
+    }).encode("utf-8")
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        + GEMINI_MODEL + ":generateContent?key=" + GEMINI_API_KEY
+    )
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = parse_food_json(text)
+        return {
+            "name": str(parsed.get("name", "Food"))[:120],
+            "calories": max(0, round(float(parsed.get("calories", 0) or 0))),
+            "protein": max(0, round(float(parsed.get("protein", 0) or 0), 1)),
+            "fat": max(0, round(float(parsed.get("fat", 0) or 0), 1)),
+            "carbs": max(0, round(float(parsed.get("carbs", 0) or 0), 1)),
+        }
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        print(f"[garmin-proxy] Gemini API error {e.code}: {detail}")
+        return {"error": "Gemini API error " + str(e.code)}
+    except Exception as e:
+        print(f"[garmin-proxy] food lookup/analyze failed: {e}")
+        return {"error": str(e)}
+
+
+@app.route("/food-lookup", methods=["POST"])
+def food_lookup():
+    """Turns a plain-text food description (e.g. "Tesco own chocolate chip
+    cookie") into an estimated nutrition breakdown, for diet.html's
+    "Describe" button."""
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Set GEMINI_API_KEY in garmin-proxy/.env first."}), 500
+
+    data = request.get_json(silent=True) or {}
+    description = str(data.get("description") or "").strip()[:300]
+    if not description:
+        return jsonify({"error": "No description provided."}), 400
+
+    prompt = (
+        "Estimate the nutrition facts for this food, using typical/reasonable "
+        "serving sizes and known brand nutrition data where relevant.\n\n"
+        "Food: " + description + "\n\n" + FOOD_JSON_INSTRUCTIONS
+    )
+    result = call_gemini_food([{"text": prompt}])
+    return jsonify(result), (502 if "error" in result else 200)
+
+
+@app.route("/food-analyze", methods=["POST"])
+def food_analyze():
+    """Turns a photo of food into an estimated nutrition breakdown, for
+    diet.html's "Photo" button. Expects a data: URL (browser canvas/file
+    output) — strips the data: URL header before sending the raw base64 to
+    Gemini's inline_data image part."""
+    if not GEMINI_API_KEY:
+        return jsonify({"error": "Set GEMINI_API_KEY in garmin-proxy/.env first."}), 500
+
+    data = request.get_json(silent=True) or {}
+    image_data_url = str(data.get("image") or "")
+    note = str(data.get("note") or "").strip()[:300]
+    if "," not in image_data_url or not image_data_url.startswith("data:image/"):
+        return jsonify({"error": "No image provided."}), 400
+
+    header, b64data = image_data_url.split(",", 1)
+    mime_type = "image/png" if "image/png" in header else "image/jpeg"
+
+    prompt = (
+        "Look at this photo of food and estimate its nutrition facts.\n"
+        + (("Additional context from the user: " + note + "\n") if note else "")
+        + "\n" + FOOD_JSON_INSTRUCTIONS
+    )
+    parts = [
+        {"text": prompt},
+        {"inline_data": {"mime_type": mime_type, "data": b64data}},
+    ]
+    result = call_gemini_food(parts)
+    return jsonify(result), (502 if "error" in result else 200)
+
+
 if __name__ == "__main__":
     # host=0.0.0.0 so this is reachable from outside the machine (needed on
     # Render; harmless for local use — 127.0.0.1 still works too). Only used
