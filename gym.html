@@ -1393,13 +1393,19 @@ img, video, canvas, svg { max-width: 100%; }
 /* Mode toggle: hide the inactive mode */
 .wt-viewer .wt-viewer-single,
 .wt-viewer .wt-viewer-pick-view,
-.wt-viewer .wt-viewer-compare-view {
+.wt-viewer .wt-viewer-compare-view,
+.wt-viewer .wt-viewer-sbs-view {
   display: none;
   flex-direction: column; flex: 1; min-height: 0;
 }
 .wt-viewer[data-mode="single"]  .wt-viewer-single        { display: flex; }
 .wt-viewer[data-mode="pick"]    .wt-viewer-pick-view     { display: flex; }
 .wt-viewer[data-mode="compare"] .wt-viewer-compare-view  { display: flex; }
+.wt-viewer[data-mode="sbs"]     .wt-viewer-sbs-view      { display: flex; }
+
+/* 5 actions in the compare/side-by-side rows read better as 3 columns
+   (wrapping 3+2) than the default 2-column grid (wrapping 2+2+1). */
+.wt-viewer-actions-compare { grid-template-columns: repeat(3, 1fr); }
 
 .wt-viewer-pick-title {
   text-align: center; padding: 8px 0 14px;
@@ -1460,6 +1466,33 @@ img, video, canvas, svg { max-width: 100%; }
 }
 .wt-cmp-label-a { right: 10px; }
 .wt-cmp-label-b { left: 10px; }
+
+/* Side-by-side mode — plain, no masking, both photos at once, as large as
+   the frame allows. */
+.wt-sbs-stage {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px; min-height: 0;
+}
+.wt-sbs-side {
+  display: flex; flex-direction: column;
+  min-height: 0; min-width: 0;
+  background: #000; border-radius: 8px; overflow: hidden;
+}
+.wt-sbs-side img {
+  flex: 1; min-height: 0; width: 100%;
+  object-fit: contain;
+}
+.wt-sbs-meta {
+  padding: 8px 4px;
+  text-align: center; font-size: 12px; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,0.03);
+}
+@media (max-width: 560px) {
+  .wt-sbs-stage { grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+}
+
 .wt-compare-headline {
   text-align: center; padding: 14px 8px 12px;
   font-size: 14px; font-weight: 600;
@@ -1651,10 +1684,35 @@ img, video, canvas, svg { max-width: 100%; }
       </div>
       <div class="wt-compare-headline" id="wtCompareHeadline">—</div>
       <div class="wt-viewer-actions wt-viewer-actions-compare">
+        <button class="wt-viewer-btn wt-viewer-sbs" id="wtCompareSideBySide">Side by side</button>
         <button class="wt-viewer-btn wt-viewer-switch" id="wtCompareSwitch">Switch photo</button>
         <button class="wt-viewer-btn wt-viewer-back" id="wtCompareBack">← Back</button>
         <button class="wt-viewer-btn wt-viewer-close" id="wtCompareClose">Close</button>
         <button class="wt-viewer-btn wt-viewer-delete" id="wtCompareDelete">Delete</button>
+      </div>
+    </div>
+
+    <!-- SIDE-BY-SIDE MODE — both photos shown at once, full size, no
+         overlay/masking - the plain "just look at them next to each
+         other" view. -->
+    <div class="wt-viewer-sbs-view">
+      <div class="wt-sbs-stage">
+        <div class="wt-sbs-side">
+          <img id="wtSbsImgA" alt="">
+          <div class="wt-sbs-meta" id="wtSbsMetaA">—</div>
+        </div>
+        <div class="wt-sbs-side">
+          <img id="wtSbsImgB" alt="">
+          <div class="wt-sbs-meta" id="wtSbsMetaB">—</div>
+        </div>
+      </div>
+      <div class="wt-compare-headline" id="wtSbsHeadline">—</div>
+      <div class="wt-viewer-actions wt-viewer-actions-compare">
+        <button class="wt-viewer-btn wt-viewer-sbs" id="wtSbsSlider">Slider</button>
+        <button class="wt-viewer-btn wt-viewer-switch" id="wtSbsSwitch">Switch photo</button>
+        <button class="wt-viewer-btn wt-viewer-back" id="wtSbsBack">← Back</button>
+        <button class="wt-viewer-btn wt-viewer-close" id="wtSbsClose">Close</button>
+        <button class="wt-viewer-btn wt-viewer-delete" id="wtSbsDelete">Delete</button>
       </div>
     </div>
 
@@ -4202,36 +4260,52 @@ img, video, canvas, svg { max-width: 100%; }
   }
   setupCompareSlider();
 
+  // Date-arrow + weight-delta headline, shared by both compare views.
+  function computeCompareHeadline(A, B) {
+    const wA = parseWeightStr(A.weight);
+    const wB = parseWeightStr(B.weight);
+    let cls = 'flat', text = photoFmtDate(A.dateKey) + ' → ' + photoFmtDate(B.dateKey);
+    if (wA != null && wB != null) {
+      const diff = wA - wB; // active vs comparison
+      text += ' ' + fmtDelta(diff, state.units);
+      if (Math.abs(diff) < 0.05) cls = 'flat';
+      else if (diff > 0) cls = 'up';
+      else cls = 'down';
+    }
+    return { text, cls };
+  }
+
   function openCompare(activeId, otherId) {
     const A = photos.find(p => p.id === activeId);
     const B = photos.find(p => p.id === otherId);
     if (!A || !B) return;
     activePhotoId = activeId;
     comparePhotoId = otherId;
+
     $('wtCmpImgA').src = A.dataUrl;
     $('wtCmpImgB').src = B.dataUrl;
     $('wtCmpMetaA').textContent = photoFmtDate(A.dateKey) + ' · ' + (A.weight || '—');
     $('wtCmpMetaB').textContent = photoFmtDate(B.dateKey) + ' · ' + (B.weight || '—');
-    // Headline — date arrow + weight delta
-    const wA = parseWeightStr(A.weight);
-    const wB = parseWeightStr(B.weight);
-    const headEl = $('wtCompareHeadline');
-    let cls = 'flat', headline = photoFmtDate(A.dateKey) + ' → ' + photoFmtDate(B.dateKey);
-    if (wA != null && wB != null) {
-      const diff = wA - wB; // active vs comparison
-      headline += ' ' + fmtDelta(diff, state.units);
-      if (Math.abs(diff) < 0.05) cls = 'flat';
-      else if (diff > 0) cls = 'up';
-      else cls = 'down';
-    }
-    headEl.textContent = headline;
-    headEl.className = 'wt-compare-headline ' + cls;
+
+    $('wtSbsImgA').src = A.dataUrl;
+    $('wtSbsImgB').src = B.dataUrl;
+    $('wtSbsMetaA').textContent = photoFmtDate(A.dateKey) + ' · ' + (A.weight || '—');
+    $('wtSbsMetaB').textContent = photoFmtDate(B.dateKey) + ' · ' + (B.weight || '—');
+
+    const { text, cls } = computeCompareHeadline(A, B);
+    $('wtCompareHeadline').textContent = text;
+    $('wtCompareHeadline').className = 'wt-compare-headline ' + cls;
+    $('wtSbsHeadline').textContent = text;
+    $('wtSbsHeadline').className = 'wt-compare-headline ' + cls;
+
     $('wtViewer').dataset.mode = 'compare';
     $('wtViewer').classList.add('is-open');
     setCompareSliderPct(50);
-    pvDeleteConfirm = false;
-    $('wtCompareDelete').textContent = 'Delete';
-    $('wtCompareDelete').classList.remove('is-confirm');
+    [$('wtCompareDelete'), $('wtSbsDelete')].forEach(btn => {
+      pvDeleteConfirm = false;
+      btn.textContent = 'Delete';
+      btn.classList.remove('is-confirm');
+    });
   }
 
   function deleteActivePhoto(deleteBtn) {
@@ -4256,8 +4330,10 @@ img, video, canvas, svg { max-width: 100%; }
   $('wtViewerClose').addEventListener('click', closePhoto);
   $('wtPickClose').addEventListener('click', closePhoto);
   $('wtCompareClose').addEventListener('click', closePhoto);
+  $('wtSbsClose').addEventListener('click', closePhoto);
   $('wtViewerDelete').addEventListener('click', () => deleteActivePhoto($('wtViewerDelete')));
   $('wtCompareDelete').addEventListener('click', () => deleteActivePhoto($('wtCompareDelete')));
+  $('wtSbsDelete').addEventListener('click', () => deleteActivePhoto($('wtSbsDelete')));
   $('wtViewerCompare').addEventListener('click', () => {
     if (!activePhotoId) return;
     openComparePicker(activePhotoId);
@@ -4276,8 +4352,19 @@ img, video, canvas, svg { max-width: 100%; }
       closePhoto();
     }
   });
+  $('wtSbsBack').addEventListener('click', () => {
+    if (activePhotoId) {
+      $('wtViewer').dataset.mode = 'single';
+    } else {
+      closePhoto();
+    }
+  });
   // Re-open the picker to choose a different comparison photo
   $('wtCompareSwitch').addEventListener('click', () => openComparePicker(activePhotoId));
+  $('wtSbsSwitch').addEventListener('click', () => openComparePicker(activePhotoId));
+  // Toggle between the slider and plain side-by-side views of the SAME pair
+  $('wtCompareSideBySide').addEventListener('click', () => { $('wtViewer').dataset.mode = 'sbs'; });
+  $('wtSbsSlider').addEventListener('click', () => { $('wtViewer').dataset.mode = 'compare'; });
 
   // ============================================================
   // BOOT
