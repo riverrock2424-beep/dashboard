@@ -56,6 +56,7 @@ html, body {
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overflow-x: hidden; /* belt-and-suspenders: clip instead of zoom-to-fit if anything ever overflows */
 }
 .shell { max-width: 720px; margin: 0 auto; padding: 24px 16px 100px; }
 
@@ -159,8 +160,8 @@ html, body {
   font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums;
 }
 
-.macro-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
-.macro-tile { text-align: center; }
+.macro-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; min-width: 0; }
+.macro-tile { text-align: center; min-width: 0; }
 .macro-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-3); font-weight: 700; margin-bottom: 6px; }
 .macro-bar-track { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; margin-bottom: 6px; }
 .macro-bar-fill { height: 100%; border-radius: 999px; width: 0%; transition: width 0.4s ease; }
@@ -171,7 +172,7 @@ html, body {
 .macro-val { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* ----- Add food ----- */
-.add-food-helpers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.add-food-helpers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; min-width: 0; }
 .helper-btn {
   padding: 12px; border-radius: 12px;
   background: rgba(255,255,255,0.04); border: 1px solid var(--border);
@@ -200,9 +201,14 @@ html, body {
 .field input[type="number"]::-webkit-outer-spin-button,
 .field input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .field input:focus, .field select:focus { border-color: rgba(110,231,183,0.40); box-shadow: 0 0 0 2px rgba(110,231,183,0.10); }
-.field-row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-.field-row-4 input { text-align: center; }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Grid items default to min-width: auto (their content's intrinsic
+   minimum), not 0 — with 3-4 columns of <input>s that adds up past a
+   phone's width and forces the whole page to zoom out. min-width: 0 lets
+   them actually shrink to fit their track instead of overflowing it. */
+.field-row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; min-width: 0; }
+.field-row-4 input { text-align: center; min-width: 0; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-width: 0; }
+.field-row .field { min-width: 0; }
 
 .seg { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
 .seg button {
