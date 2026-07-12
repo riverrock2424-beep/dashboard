@@ -191,16 +191,19 @@ html, body {
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .field label { font-size: 11px; color: var(--text-3); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .field-note { font-size: 11px; color: var(--text-3); margin-top: 4px; line-height: 1.4; font-style: italic; }
-.field input:disabled { opacity: 0.55; cursor: not-allowed; }
-.field input[type="text"], .field input[type="number"], .field select {
+input:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Unscoped (not ".field input") so this also covers the macro-entry row
+   below, whose inputs sit directly in .field-row-4 with no .field
+   wrapper — they were falling through to unstyled browser defaults. */
+input[type="text"], input[type="number"], select {
   background: rgba(0,0,0,0.28); border: 1px solid var(--border);
   color: var(--text-1); font-family: inherit; font-size: 14px;
   padding: 10px 12px; border-radius: 10px; outline: none;
   width: 100%; -moz-appearance: textfield;
 }
-.field input[type="number"]::-webkit-outer-spin-button,
-.field input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.field input:focus, .field select:focus { border-color: rgba(110,231,183,0.40); box-shadow: 0 0 0 2px rgba(110,231,183,0.10); }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input:focus, select:focus { border-color: rgba(110,231,183,0.40); box-shadow: 0 0 0 2px rgba(110,231,183,0.10); }
 /* Grid items default to min-width: auto (their content's intrinsic
    minimum), not 0 — with 3-4 columns of <input>s that adds up past a
    phone's width and forces the whole page to zoom out. min-width: 0 lets
