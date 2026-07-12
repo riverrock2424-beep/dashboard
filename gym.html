@@ -1392,12 +1392,20 @@ img, video, canvas, svg { max-width: 100%; }
 
 /* Mode toggle: hide the inactive mode */
 .wt-viewer .wt-viewer-single,
+.wt-viewer .wt-viewer-pick-view,
 .wt-viewer .wt-viewer-compare-view {
   display: none;
   flex-direction: column; flex: 1; min-height: 0;
 }
 .wt-viewer[data-mode="single"]  .wt-viewer-single        { display: flex; }
+.wt-viewer[data-mode="pick"]    .wt-viewer-pick-view     { display: flex; }
 .wt-viewer[data-mode="compare"] .wt-viewer-compare-view  { display: flex; }
+
+.wt-viewer-pick-title {
+  text-align: center; padding: 8px 0 14px;
+  font-size: 15px; font-weight: 600; color: var(--text-1);
+}
+.wt-pick-grid { flex: 1; overflow-y: auto; align-content: start; }
 
 /* Compare-mode fullscreen before/after slider */
 .wt-cmp-stage {
@@ -1413,13 +1421,14 @@ img, video, canvas, svg { max-width: 100%; }
   object-fit: contain;
   pointer-events: none;
 }
-.wt-cmp-overlay {
-  position: absolute; top: 0; left: 0; height: 100%;
-  width: 50%;
-  overflow: hidden;
-  pointer-events: none;
+/* Both images are identically sized/positioned (full stage) — the top one
+   (B) is just masked with clip-path down to the handle's X position, so
+   there's no separate box to resize/misalign, just a crop of the same
+   image. Performant: clip-path is compositor-only, no layout/reflow. */
+.wt-cmp-img-top {
+  clip-path: inset(0 50% 0 0);
+  will-change: clip-path;
 }
-.wt-cmp-overlay .wt-cmp-img { width: var(--wt-cmp-stage-w, 100%); }
 .wt-cmp-handle {
   position: absolute; top: 0; bottom: 0; left: 50%;
   transform: translateX(-50%);
@@ -1596,7 +1605,8 @@ img, video, canvas, svg { max-width: 100%; }
     </div>
   </div>
 
-  <!-- Photo viewer — has two modes: single (one photo) and compare (two photos side-by-side) -->
+  <!-- Photo viewer — three modes: single (one photo), pick (choose which
+       photo to compare against), compare (fullscreen before/after slider) -->
   <div class="wt-viewer" id="wtViewer" data-mode="single" aria-hidden="true">
 
     <!-- SINGLE MODE -->
@@ -1615,15 +1625,23 @@ img, video, canvas, svg { max-width: 100%; }
       </div>
     </div>
 
+    <!-- PICK MODE — choose which other photo to compare against -->
+    <div class="wt-viewer-pick-view">
+      <div class="wt-viewer-pick-title">Compare to&hellip;</div>
+      <div class="wt-photo-grid wt-pick-grid" id="wtComparePickGrid"></div>
+      <div class="wt-viewer-actions">
+        <button class="wt-viewer-btn wt-viewer-back" id="wtPickBack">← Back</button>
+        <button class="wt-viewer-btn wt-viewer-close" id="wtPickClose">Close</button>
+      </div>
+    </div>
+
     <!-- COMPARE MODE — fullscreen before/after slider: photo A fills the
-         frame, photo B sits on top clipped to the handle's position, so
-         dragging left/right wipes between them like a reveal comparison. -->
+         frame; photo B sits on top, clipped via clip-path to the handle's
+         position, so dragging left/right wipes between them. -->
     <div class="wt-viewer-compare-view">
       <div class="wt-cmp-stage" id="wtCmpStage">
         <img id="wtCmpImgA" class="wt-cmp-img" alt="">
-        <div class="wt-cmp-overlay" id="wtCmpOverlay">
-          <img id="wtCmpImgB" class="wt-cmp-img" alt="">
-        </div>
+        <img id="wtCmpImgB" class="wt-cmp-img wt-cmp-img-top" alt="">
         <div class="wt-cmp-handle" id="wtCmpHandle">
           <div class="wt-cmp-handle-line"></div>
           <div class="wt-cmp-handle-grip">&#8596;</div>
@@ -4122,28 +4140,37 @@ img, video, canvas, svg { max-width: 100%; }
     return '· ' + sign + Math.abs(diff).toFixed(1) + ' ' + units;
   }
 
-  // Pick the "compare to" photo for a given active id. Default: the most
-  // recent photo BEFORE the active one (older → time-progress comparison).
-  // Falls back to the most recent newer photo if active is the oldest.
-  function defaultCompareFor(activeId) {
-    const idx = photos.findIndex(p => p.id === activeId);
-    if (idx === -1) return null;
-    if (photos[idx + 1]) return photos[idx + 1].id;        // photos are stored newest-first
-    if (photos[idx - 1]) return photos[idx - 1].id;
-    return null;
+  // ---- Pick mode — choose which other photo to compare against ----
+  function openComparePicker(activeId) {
+    const others = photos.filter(p => p.id !== activeId);
+    if (!others.length) { alert('Need at least one other photo to compare.'); return; }
+    activePhotoId = activeId;
+    const grid = $('wtComparePickGrid');
+    grid.innerHTML = others.map(p =>
+      '<button class="wt-photo-card" data-id="' + p.id + '" type="button">' +
+        '<img src="' + p.dataUrl + '" alt="">' +
+        '<div class="wt-photo-overlay"></div>' +
+        '<div class="wt-photo-meta">' +
+          '<span class="wt-photo-date">' + photoFmtDate(p.dateKey) + '</span>' +
+          '<span class="wt-photo-weight">' + (p.weight || '—') + '</span>' +
+        '</div>' +
+      '</button>'
+    ).join('');
+    grid.querySelectorAll('.wt-photo-card').forEach(card => {
+      card.addEventListener('click', () => openCompare(activeId, card.dataset.id));
+    });
+    $('wtViewer').dataset.mode = 'pick';
+    $('wtViewer').classList.add('is-open');
   }
 
-  // Before/after slider — photo A fills the frame, photo B sits in an
-  // overlay clipped to the handle's X position (its own <img> stays full
-  // stage-width so it doesn't visibly resize/squash as the clip changes,
-  // it's just being cropped by the shrinking/growing overlay box).
-  function syncCompareStageWidth() {
-    const stage = $('wtCmpStage');
-    stage.style.setProperty('--wt-cmp-stage-w', stage.clientWidth + 'px');
-  }
+  // Before/after slider — both images are identically sized/positioned
+  // (full stage, object-fit: contain); the top one (B) is masked with
+  // clip-path down to the handle's X position, so dragging just crops it
+  // rather than resizing/repositioning anything — no separate overlay box
+  // to keep in sync, no per-frame layout reads.
   function setCompareSliderPct(pct) {
     pct = Math.max(0, Math.min(100, pct));
-    $('wtCmpOverlay').style.width = pct + '%';
+    $('wtCmpImgB').style.clipPath = 'inset(0 ' + (100 - pct) + '% 0 0)';
     $('wtCmpHandle').style.left = pct + '%';
   }
   function setupCompareSlider() {
@@ -4172,9 +4199,6 @@ img, video, canvas, svg { max-width: 100%; }
     window.addEventListener('touchmove', onMove, { passive: true });
     window.addEventListener('mouseup', onUp);
     window.addEventListener('touchend', onUp);
-    window.addEventListener('resize', () => {
-      if ($('wtViewer').dataset.mode === 'compare') syncCompareStageWidth();
-    });
   }
   setupCompareSlider();
 
@@ -4204,20 +4228,10 @@ img, video, canvas, svg { max-width: 100%; }
     headEl.className = 'wt-compare-headline ' + cls;
     $('wtViewer').dataset.mode = 'compare';
     $('wtViewer').classList.add('is-open');
-    syncCompareStageWidth();
     setCompareSliderPct(50);
     pvDeleteConfirm = false;
     $('wtCompareDelete').textContent = 'Delete';
     $('wtCompareDelete').classList.remove('is-confirm');
-  }
-
-  function cycleCompareTarget() {
-    if (!activePhotoId) return;
-    const others = photos.filter(p => p.id !== activePhotoId);
-    if (!others.length) return;
-    const curIdx = others.findIndex(p => p.id === comparePhotoId);
-    const nextIdx = (curIdx + 1) % others.length;
-    openCompare(activePhotoId, others[nextIdx].id);
   }
 
   function deleteActivePhoto(deleteBtn) {
@@ -4240,14 +4254,20 @@ img, video, canvas, svg { max-width: 100%; }
   }
 
   $('wtViewerClose').addEventListener('click', closePhoto);
+  $('wtPickClose').addEventListener('click', closePhoto);
   $('wtCompareClose').addEventListener('click', closePhoto);
   $('wtViewerDelete').addEventListener('click', () => deleteActivePhoto($('wtViewerDelete')));
   $('wtCompareDelete').addEventListener('click', () => deleteActivePhoto($('wtCompareDelete')));
   $('wtViewerCompare').addEventListener('click', () => {
     if (!activePhotoId) return;
-    const otherId = defaultCompareFor(activePhotoId);
-    if (!otherId) { alert('Need at least one other photo to compare.'); return; }
-    openCompare(activePhotoId, otherId);
+    openComparePicker(activePhotoId);
+  });
+  $('wtPickBack').addEventListener('click', () => {
+    if (activePhotoId) {
+      $('wtViewer').dataset.mode = 'single';
+    } else {
+      closePhoto();
+    }
   });
   $('wtCompareBack').addEventListener('click', () => {
     if (activePhotoId) {
@@ -4256,8 +4276,8 @@ img, video, canvas, svg { max-width: 100%; }
       closePhoto();
     }
   });
-  // Tap the right-hand "other" photo to cycle through different comparison targets
-  $('wtCompareSwitch').addEventListener('click', cycleCompareTarget);
+  // Re-open the picker to choose a different comparison photo
+  $('wtCompareSwitch').addEventListener('click', () => openComparePicker(activePhotoId));
 
   // ============================================================
   // BOOT
