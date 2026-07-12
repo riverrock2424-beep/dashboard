@@ -1399,33 +1399,58 @@ img, video, canvas, svg { max-width: 100%; }
 .wt-viewer[data-mode="single"]  .wt-viewer-single        { display: flex; }
 .wt-viewer[data-mode="compare"] .wt-viewer-compare-view  { display: flex; }
 
-/* Compare-mode side-by-side layout */
-.wt-compare-stage {
-  flex: 1; display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px; min-height: 0;
-  align-items: stretch;
+/* Compare-mode fullscreen before/after slider */
+.wt-cmp-stage {
+  flex: 1; position: relative; min-height: 0;
+  overflow: hidden; border-radius: 8px;
+  background: #000;
+  touch-action: none; /* we handle the drag gesture ourselves */
+  user-select: none;
 }
-.wt-compare-side {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  min-height: 0; min-width: 0;
-  background: transparent;
-  border: none; padding: 0; cursor: default;
-  font-family: inherit;
+.wt-cmp-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
-.wt-compare-side img {
-  max-width: 100%; max-height: calc(100% - 28px);
-  object-fit: contain; border-radius: 6px;
+.wt-cmp-overlay {
+  position: absolute; top: 0; left: 0; height: 100%;
+  width: 50%;
+  overflow: hidden;
+  pointer-events: none;
 }
-.wt-compare-meta-line {
-  margin-top: 6px;
-  font-size: 12px; color: var(--text-3);
-  text-align: center;
+.wt-cmp-overlay .wt-cmp-img { width: var(--wt-cmp-stage-w, 100%); }
+.wt-cmp-handle {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 44px; margin-left: -22px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: ew-resize;
+}
+.wt-cmp-handle-line {
+  position: absolute; top: 0; bottom: 0; left: 50%;
+  width: 2px; margin-left: -1px;
+  background: rgba(255,255,255,0.85);
+  box-shadow: 0 0 6px rgba(0,0,0,0.5);
+}
+.wt-cmp-handle-grip {
+  position: relative; z-index: 1;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(255,255,255,0.95); color: #0a0a0b;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+.wt-cmp-label {
+  position: absolute; top: 10px;
+  padding: 4px 9px; border-radius: 999px;
+  background: rgba(0,0,0,0.55);
+  color: var(--text-1); font-size: 11px;
   font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
-.wt-compare-other { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.wt-compare-other:hover img { outline: 1px solid rgba(110,231,183,0.30); }
+.wt-cmp-label-a { right: 10px; }
+.wt-cmp-label-b { left: 10px; }
 .wt-compare-headline {
   text-align: center; padding: 14px 8px 12px;
   font-size: 14px; font-weight: 600;
@@ -1437,8 +1462,7 @@ img, video, canvas, svg { max-width: 100%; }
 .wt-compare-headline.flat { color: var(--text-2); }
 
 @media (max-width: 480px) {
-  .wt-compare-stage { gap: 4px; }
-  .wt-compare-meta-line { font-size: 11px; }
+  .wt-cmp-label { font-size: 10px; padding: 3px 7px; }
 }
 
 .hidden { display: none !important; }
@@ -1591,20 +1615,25 @@ img, video, canvas, svg { max-width: 100%; }
       </div>
     </div>
 
-    <!-- COMPARE MODE -->
+    <!-- COMPARE MODE — fullscreen before/after slider: photo A fills the
+         frame, photo B sits on top clipped to the handle's position, so
+         dragging left/right wipes between them like a reveal comparison. -->
     <div class="wt-viewer-compare-view">
-      <div class="wt-compare-stage">
-        <div class="wt-compare-side" id="wtCmpSideA">
-          <img id="wtCmpImgA" alt="">
-          <div class="wt-compare-meta-line" id="wtCmpMetaA">—</div>
+      <div class="wt-cmp-stage" id="wtCmpStage">
+        <img id="wtCmpImgA" class="wt-cmp-img" alt="">
+        <div class="wt-cmp-overlay" id="wtCmpOverlay">
+          <img id="wtCmpImgB" class="wt-cmp-img" alt="">
         </div>
-        <button type="button" class="wt-compare-side wt-compare-other" id="wtCmpSideB" title="Tap to compare to a different photo" aria-label="Compare to a different photo">
-          <img id="wtCmpImgB" alt="">
-          <div class="wt-compare-meta-line" id="wtCmpMetaB">—</div>
-        </button>
+        <div class="wt-cmp-handle" id="wtCmpHandle">
+          <div class="wt-cmp-handle-line"></div>
+          <div class="wt-cmp-handle-grip">&#8596;</div>
+        </div>
+        <div class="wt-cmp-label wt-cmp-label-a" id="wtCmpMetaA">—</div>
+        <div class="wt-cmp-label wt-cmp-label-b" id="wtCmpMetaB">—</div>
       </div>
       <div class="wt-compare-headline" id="wtCompareHeadline">—</div>
-      <div class="wt-viewer-actions">
+      <div class="wt-viewer-actions wt-viewer-actions-compare">
+        <button class="wt-viewer-btn wt-viewer-switch" id="wtCompareSwitch">Switch photo</button>
         <button class="wt-viewer-btn wt-viewer-back" id="wtCompareBack">← Back</button>
         <button class="wt-viewer-btn wt-viewer-close" id="wtCompareClose">Close</button>
         <button class="wt-viewer-btn wt-viewer-delete" id="wtCompareDelete">Delete</button>
@@ -3893,11 +3922,13 @@ img, video, canvas, svg { max-width: 100%; }
   }
   // Downscale a dataURL to a max longest-side dimension and re-encode as
   // JPEG. Phone camera photos are often 2–5MB which blows the ~5MB
-  // localStorage quota after one or two saves. Compressing to ~1080px /
-  // q=0.75 typically drops each photo to <100KB.
+  // localStorage quota after one or two saves. 1600px / q=0.85 keeps
+  // photos sharp enough to actually see progress while still landing
+  // comfortably under a few hundred KB each; photosAdd() below falls back
+  // to a much smaller re-compress if that ever doesn't fit.
   function compressPhotoDataUrl(dataUrl, maxDim, quality) {
-    maxDim = maxDim || 1080;
-    quality = quality == null ? 0.75 : quality;
+    maxDim = maxDim || 1600;
+    quality = quality == null ? 0.85 : quality;
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -4102,6 +4133,51 @@ img, video, canvas, svg { max-width: 100%; }
     return null;
   }
 
+  // Before/after slider — photo A fills the frame, photo B sits in an
+  // overlay clipped to the handle's X position (its own <img> stays full
+  // stage-width so it doesn't visibly resize/squash as the clip changes,
+  // it's just being cropped by the shrinking/growing overlay box).
+  function syncCompareStageWidth() {
+    const stage = $('wtCmpStage');
+    stage.style.setProperty('--wt-cmp-stage-w', stage.clientWidth + 'px');
+  }
+  function setCompareSliderPct(pct) {
+    pct = Math.max(0, Math.min(100, pct));
+    $('wtCmpOverlay').style.width = pct + '%';
+    $('wtCmpHandle').style.left = pct + '%';
+  }
+  function setupCompareSlider() {
+    const stage = $('wtCmpStage');
+    const handle = $('wtCmpHandle');
+    let dragging = false;
+    function pctFromClientX(clientX) {
+      const rect = stage.getBoundingClientRect();
+      return ((clientX - rect.left) / rect.width) * 100;
+    }
+    function onMove(e) {
+      if (!dragging) return;
+      const point = e.touches ? e.touches[0] : e;
+      setCompareSliderPct(pctFromClientX(point.clientX));
+    }
+    function onDown(e) {
+      dragging = true;
+      onMove(e);
+    }
+    function onUp() { dragging = false; }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, { passive: true });
+    stage.addEventListener('mousedown', onDown);
+    stage.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchend', onUp);
+    window.addEventListener('resize', () => {
+      if ($('wtViewer').dataset.mode === 'compare') syncCompareStageWidth();
+    });
+  }
+  setupCompareSlider();
+
   function openCompare(activeId, otherId) {
     const A = photos.find(p => p.id === activeId);
     const B = photos.find(p => p.id === otherId);
@@ -4128,6 +4204,8 @@ img, video, canvas, svg { max-width: 100%; }
     headEl.className = 'wt-compare-headline ' + cls;
     $('wtViewer').dataset.mode = 'compare';
     $('wtViewer').classList.add('is-open');
+    syncCompareStageWidth();
+    setCompareSliderPct(50);
     pvDeleteConfirm = false;
     $('wtCompareDelete').textContent = 'Delete';
     $('wtCompareDelete').classList.remove('is-confirm');
@@ -4179,7 +4257,7 @@ img, video, canvas, svg { max-width: 100%; }
     }
   });
   // Tap the right-hand "other" photo to cycle through different comparison targets
-  $('wtCmpSideB').addEventListener('click', cycleCompareTarget);
+  $('wtCompareSwitch').addEventListener('click', cycleCompareTarget);
 
   // ============================================================
   // BOOT
