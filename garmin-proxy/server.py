@@ -268,6 +268,42 @@ def garmin_data():
     return jsonify(payload)
 
 
+def build_context_lines(context):
+    """Turns the cross-app context blob (gym day, weather, water, meditation)
+    main.html reads out of localStorage into plain-English lines the model
+    can weave into the summary. Every piece is optional — missing/malformed
+    data just gets skipped rather than failing the whole request."""
+    if not isinstance(context, dict):
+        return []
+    lines = []
+
+    gym = context.get("gym")
+    if isinstance(gym, dict):
+        if gym.get("isRest"):
+            lines.append("Today is a scheduled Rest day at the gym (no workout planned).")
+        else:
+            split_name = gym.get("splitName") or "training"
+            status = "already logged as done" if gym.get("doneToday") else "not done yet"
+            lines.append(f"Today is a {split_name} day at the gym, {status}.")
+
+    weather_c = context.get("weatherC")
+    if isinstance(weather_c, (int, float)):
+        lines.append(f"Current weather: {round(weather_c)}°C.")
+
+    water = context.get("water")
+    if isinstance(water, dict) and water.get("targetMl"):
+        lines.append(f"Water intake today: {water.get('doneMl', 0)}ml of a {water.get('targetMl', 0)}ml target.")
+
+    meditation = context.get("meditation")
+    if isinstance(meditation, dict):
+        if meditation.get("doneToday"):
+            lines.append(f"Meditated today for {meditation.get('minutes', 0)} minutes.")
+        else:
+            lines.append("Hasn't meditated yet today.")
+
+    return lines
+
+
 @app.route("/ai-summary", methods=["POST"])
 def ai_summary():
     """Turns today's task list into a short, natural-language summary for
@@ -282,16 +318,25 @@ def ai_summary():
     # prompt — this is a summary card, not a full task dump.
     left = [str(t)[:200] for t in (data.get("left") or []) if t][:25]
     done = [str(t)[:200] for t in (data.get("done") or []) if t][:25]
+    context_lines = build_context_lines(data.get("context"))
 
     if not left and not done:
         return jsonify({"summary": "No tasks yet today — add one to get started."})
 
+    context_block = ""
+    if context_lines:
+        context_block = "\n\nOther context for today:\n" + "\n".join(context_lines) + "\n"
+
     prompt = (
-        "Write a warm, encouraging 2-3 sentence summary of someone's day for a personal "
+        "Write a warm, encouraging 2-4 sentence summary of someone's day for a personal "
         "task dashboard. Second person ('you'), plain prose, no bullet points, no markdown, "
-        "no preamble or labels — just the summary itself.\n\n"
+        "no preamble or labels — just the summary itself. Weave in the extra context below "
+        "naturally where it's actually relevant (e.g. the gym day, water progress, weather, "
+        "meditation) - don't force in every single one if it would read awkwardly, and don't "
+        "just list them.\n\n"
         + ("Still left to do today: " + "; ".join(left) + ".\n" if left else "Nothing left to do today.\n")
         + ("Already done today: " + "; ".join(done) + ".\n" if done else "Nothing done yet today.\n")
+        + context_block
     )
 
     body = json.dumps({

@@ -1439,8 +1439,105 @@
   function aiSummaryProxyUrl() {
     return (localStorage.getItem('garmin_cfg_proxyUrl') || AI_SUMMARY_DEFAULT_PROXY).replace(/\/$/, '');
   }
-  function taskTextSignature(left, done) {
-    return JSON.stringify([left.map(function (g) { return g.text; }), done.map(function (g) { return g.text; })]);
+
+  // ---- Cross-app context — same localStorage-reading pattern water.html
+  // and topbar.js already use to peek at gym.html's data (each page reads
+  // the others' keys directly rather than sharing a module). Everything
+  // here is best-effort: missing/malformed data just omits that piece
+  // instead of breaking the summary. ----
+  function calendarDateKey(d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function readJSON(key) {
+    try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; }
+  }
+  function readGymTodayContext() {
+    const coach = readJSON('po_coach_v1');
+    if (!coach || !Array.isArray(coach.splitRotation) || !coach.splitRotation.length) return null;
+    try {
+      const rot = coach.splitRotation;
+      const anchor = coach.splitAnchor || { date: calendarDateKey(), index: 0 };
+      const a = new Date(anchor.date);
+      const t = new Date();
+      a.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((t - a) / 86400000);
+      const idx = ((anchor.index + diffDays) % rot.length + rot.length) % rot.length;
+      const splitName = rot[idx] || '—';
+      const doneDays = readJSON('po_coach_workout_done') || {};
+      return {
+        splitName: splitName,
+        isRest: /^rest\b/i.test(splitName),
+        doneToday: !!doneDays[calendarDateKey()]
+      };
+    } catch (e) { return null; }
+  }
+  function readWeatherContext() {
+    const w = readJSON('po_water_weather_v1');
+    return (w && w.tempC != null) ? Math.round(w.tempC) : null;
+  }
+  function readWaterContext() {
+    const state = readJSON('po_water_v1');
+    if (!state) return null;
+    const taps = (state.logs || {})[calendarDateKey()] || 0;
+    const doneMl = taps * (state.mlIncrement || 100);
+    const p = state.profile || { weightKg: 75 };
+
+    let gymWeightKg = null;
+    const weights = readJSON('po_coach_weights');
+    if (Array.isArray(weights) && weights.length) {
+      const sorted = weights.slice().sort(function (a, b) { return (a.dateKey || '').localeCompare(b.dateKey || ''); });
+      const last = sorted[sorted.length - 1];
+      if (last && last.weight != null) {
+        const coach = readJSON('po_coach_v1') || {};
+        gymWeightKg = coach.units === 'lb' ? last.weight / 2.20462 : last.weight;
+      }
+    }
+
+    let gymActivity = null;
+    const doneDays = readJSON('po_coach_workout_done');
+    if (doneDays && typeof doneDays === 'object') {
+      gymActivity = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        if (doneDays[calendarDateKey(d)]) gymActivity++;
+      }
+    }
+
+    const weatherTempC = readWeatherContext();
+    const wKg = gymWeightKg != null ? gymWeightKg : (state.weightUnit === 'lb' ? (p.weightKg || 0) / 2.20462 : (p.weightKg || 0));
+    const activityHrs = gymActivity != null ? gymActivity : (p.activityHrsPerWeek || 0);
+    const base = wKg * 35;
+    const exercise = activityHrs / 7 * 500;
+    const weather = (weatherTempC != null && weatherTempC > 20) ? Math.min(1000, (weatherTempC - 20) * 40) : 0;
+    let adjust = 0;
+    if (p.sex === 'm') adjust += 200;
+    if ((p.age || 0) >= 50) adjust += 100;
+    const targetMl = Math.max(1, Math.round(base + exercise + weather + adjust));
+
+    return { doneMl: Math.round(doneMl), targetMl: targetMl };
+  }
+  function readMeditationContext() {
+    const log = readJSON('medi:log');
+    if (!log) return null;
+    const entry = log[calendarDateKey()];
+    return { doneToday: !!(entry && entry.count > 0), minutes: entry ? (entry.minutes || 0) : 0 };
+  }
+  function buildSummaryContext() {
+    return {
+      gym: readGymTodayContext(),
+      weatherC: readWeatherContext(),
+      water: readWaterContext(),
+      meditation: readMeditationContext()
+    };
+  }
+  function taskTextSignature(left, done, context) {
+    return JSON.stringify([
+      left.map(function (g) { return g.text; }),
+      done.map(function (g) { return g.text; }),
+      context
+    ]);
   }
   function fallbackSummaryText(left, done) {
     if (!left.length && !done.length) return 'No tasks yet today — add one below to get started.';
@@ -1453,7 +1550,8 @@
     const goals = getTodayGoals();
     const left = goals.filter(function (g) { return !g.done; });
     const done = goals.filter(function (g) { return g.done; });
-    const sig = taskTextSignature(left, done);
+    const context = buildSummaryContext();
+    const sig = taskTextSignature(left, done, context);
     const summaryEl = document.getElementById('todaySummaryText');
     const cache = storeGet(AI_SUMMARY_CACHE_KEY) || {};
 
@@ -1480,7 +1578,8 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         left: left.map(function (g) { return g.text; }),
-        done: done.map(function (g) { return g.text; })
+        done: done.map(function (g) { return g.text; }),
+        context: context
       }),
       signal: controller.signal
     })
