@@ -40,7 +40,7 @@ load_dotenv()
 GARMIN_EMAIL = os.environ.get("GARMIN_EMAIL")
 GARMIN_PASSWORD = os.environ.get("GARMIN_PASSWORD")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 PORT = int(os.environ.get("PORT", 8734))
 TOKEN_STORE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".garmin_session")
 
