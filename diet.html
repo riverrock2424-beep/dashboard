@@ -839,28 +839,57 @@ input:focus, select:focus { border-color: rgba(110,231,183,0.40); box-shadow: 0 
     $('camVideo').srcObject = null;
     $('camOverlay').classList.remove('is-open');
   }
-  function analyzePhoto(dataUrl) {
+  // Phone camera photos are often several MB at full native resolution
+  // (3000px+ on a side) - sent raw, that's a very plausible cause of the
+  // intermittent 400/403s from Gemini (oversized inline image payload).
+  // Downscaling to a sane max dimension before it ever leaves the browser
+  // fixes that and makes every analysis call faster and cheaper too.
+  function compressPhotoDataUrl(dataUrl, maxDim, quality) {
+    maxDim = maxDim || 1024;
+    quality = quality == null ? 0.82 : quality;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.naturalWidth || img.width;
+        let h = img.naturalHeight || img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+          else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        try { resolve(c.toDataURL('image/jpeg', quality)); }
+        catch (e) { resolve(dataUrl); }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+  function analyzePhoto(rawDataUrl) {
     showAiStatus('Analyzing photo…', false);
     setAiButtonsBusy(true);
-    fetch(aiProxyUrl() + '/food-analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: dataUrl })
-    })
-      .then(res => res.json())
-      .then(data => {
-        setAiButtonsBusy(false);
-        if (data && !data.error) {
-          fillFoodForm(data);
-          showAiStatus('Filled in below — check it over, then Add.', false);
-        } else {
-          showAiStatus((data && data.error) || 'Analysis failed — enter it manually below.', true);
-        }
+    compressPhotoDataUrl(rawDataUrl).then((dataUrl) => {
+      fetch(aiProxyUrl() + '/food-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl })
       })
-      .catch(() => {
-        setAiButtonsBusy(false);
-        showAiStatus('Could not reach the AI backend — enter it manually below.', true);
-      });
+        .then(res => res.json())
+        .then(data => {
+          setAiButtonsBusy(false);
+          if (data && !data.error) {
+            fillFoodForm(data);
+            showAiStatus('Filled in below — check it over, then Add.', false);
+          } else {
+            showAiStatus((data && data.error) || 'Analysis failed — enter it manually below.', true);
+          }
+        })
+        .catch(() => {
+          setAiButtonsBusy(false);
+          showAiStatus('Could not reach the AI backend — enter it manually below.', true);
+        });
+    });
   }
   function fileToPhoto(file) {
     const r = new FileReader();

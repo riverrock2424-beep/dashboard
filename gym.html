@@ -2125,6 +2125,11 @@ img, video, canvas, svg { max-width: 100%; }
       if (e.setStyle == null) e.setStyle = 'none';
       if (e.restSec == null) e.restSec = 90;
       if (e.dumbbellPair == null) e.dumbbellPair = false;
+      // Exercises used to belong to exactly one day (e.day, a string).
+      // Migrate to e.days (an array) so the same exercise can live on
+      // multiple days at once.
+      if (!Array.isArray(e.days)) e.days = e.day ? [e.day] : [];
+      delete e.day;
       delete e.gym; // gym concept removed — single-gym users don't need it
     });
     s.logs = (s.logs && typeof s.logs === 'object') ? s.logs : {};
@@ -2178,6 +2183,12 @@ img, video, canvas, svg { max-width: 100%; }
     const d = state.days.find(x => x.id === id);
     return d ? d.name : id;
   }
+  // Exercises can live on multiple days now — this is the shared display
+  // string used anywhere a single exercise's day(s) are shown as text.
+  function daysDisplay(ex) {
+    if (!Array.isArray(ex.days) || !ex.days.length) return 'Unassigned';
+    return ex.days.map(d => dayName(d)).join(', ');
+  }
   function estimate1RM(w, r) { if (r < 2) return w; return w * (1 + r / 30); }
   // Dumbbell-pair exercises store the PER-DUMBBELL weight, but both are
   // moved at once — anywhere "true load lifted" matters (volume, 1RM
@@ -2190,7 +2201,7 @@ img, video, canvas, svg { max-width: 100%; }
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   }
   function getDayExercises(dayId) {
-    return state.exercises.filter(e => e.day === dayId);
+    return state.exercises.filter(e => Array.isArray(e.days) && e.days.includes(dayId));
   }
   function getLogsFor(exId) { return (state.logs[exId] || []).slice(); }
 
@@ -2266,16 +2277,17 @@ img, video, canvas, svg { max-width: 100%; }
     saveState();
   }
 
-  // ---- Remove exercise from its day (permanent) ----------------------
-  // Clears the exercise's day assignment entirely, so it's gone from that
-  // day for good (not just today) — but the exercise itself, its logs,
-  // and its history all stay intact in the library, reachable again via
-  // the Library modal's Edit button (which lets you assign it to any day,
-  // including back to this one).
-  function removeExerciseFromDay(exId) {
+  // ---- Remove exercise from one day (permanent) -----------------------
+  // Drops just THIS day from the exercise's days array, so it's gone from
+  // that day for good (not just today) — but stays on any other day it's
+  // assigned to, and the exercise itself, its logs, and its history all
+  // stay intact in the library, reachable again via the Library modal's
+  // Edit button (which lets you assign it to any day, including back to
+  // this one).
+  function removeExerciseFromDay(exId, dayId) {
     const ex = state.exercises.find(e => e.id === exId);
     if (!ex) return;
-    ex.day = '';
+    ex.days = (Array.isArray(ex.days) ? ex.days : []).filter(d => d !== dayId);
     saveState();
   }
 
@@ -2537,7 +2549,7 @@ img, video, canvas, svg { max-width: 100%; }
     const removeBtn = e.target.closest('[data-action="remove"]');
     if (removeBtn) {
       if (!confirm('Remove ' + ex.name + ' from ' + dayName(state.filterDay) + ' day? It stays saved in your exercise library — you can add it back from there (or to any other day) any time.')) return;
-      removeExerciseFromDay(originalId);
+      removeExerciseFromDay(originalId, state.filterDay);
       renderAll();
       return;
     }
@@ -2806,7 +2818,7 @@ img, video, canvas, svg { max-width: 100%; }
     }
     $('swapOptions').innerHTML = options.map(e =>
       '<button type="button" class="po-swap-option" data-id="' + e.id + '">' + escape(e.name)
-      + '<span class="po-swap-option-meta">' + dayName(e.day) + (e.bw ? ' · BW' : '') + '</span></button>'
+      + '<span class="po-swap-option-meta">' + daysDisplay(e) + (e.bw ? ' · BW' : '') + '</span></button>'
     ).join('') || '<div class="po-empty">No other exercises yet — add one instead.</div>';
     $('swapOptions').querySelectorAll('.po-swap-option').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -3210,18 +3222,22 @@ img, video, canvas, svg { max-width: 100%; }
   // EXERCISE MODAL (add / edit)
   // ============================================================
   let editingExId = null;
-  let modalDay = null;
+  let modalDays = [];
   let modalSetStyle = 'none';
   let modalReplacementIds = [];
+  // Day picker is multi-select — tapping a day toggles it in/out of
+  // modalDays rather than replacing a single selection, so one exercise
+  // can be saved onto several days at once.
   function renderModalSegs() {
     $('exDaySeg').innerHTML = state.days.map(d =>
-      '<button data-day="' + d.id + '" class="' + (modalDay === d.id ? 'active' : '') + '">' + escape(d.name) + '</button>'
+      '<button type="button" data-day="' + d.id + '" class="' + (modalDays.indexOf(d.id) !== -1 ? 'active' : '') + '">' + escape(d.name) + '</button>'
     ).join('');
     $('exDaySeg').querySelectorAll('button').forEach(b => {
       b.addEventListener('click', () => {
-        modalDay = b.dataset.day;
-        $('exDaySeg').querySelectorAll('button').forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
+        const id = b.dataset.day;
+        if (modalDays.indexOf(id) !== -1) modalDays = modalDays.filter(x => x !== id);
+        else modalDays.push(id);
+        b.classList.toggle('active');
       });
     });
   }
@@ -3251,7 +3267,7 @@ img, video, canvas, svg { max-width: 100%; }
     wrap.innerHTML = others.map(e =>
       '<label class="po-replacement-row">'
       + '<input type="checkbox" data-id="' + e.id + '"' + (modalReplacementIds.indexOf(e.id) !== -1 ? ' checked' : '') + '>'
-      + escape(e.name) + ' <span style="color:var(--text-3)">&middot; ' + dayName(e.day) + '</span>'
+      + escape(e.name) + ' <span style="color:var(--text-3)">&middot; ' + daysDisplay(e) + '</span>'
       + '</label>'
     ).join('');
     wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => {
@@ -3268,7 +3284,7 @@ img, video, canvas, svg { max-width: 100%; }
     $('exDelete').style.display = mode === 'edit' ? 'block' : 'none';
     if (mode === 'edit') {
       $('exName').value = ex.name;
-      modalDay = ex.day;
+      modalDays = Array.isArray(ex.days) ? ex.days.slice() : [];
       $('exBw').checked = !!ex.bw;
       $('exUnilateral').checked = !!ex.unilateral;
       $('exDumbbellPair').checked = !!ex.dumbbellPair;
@@ -3282,7 +3298,7 @@ img, video, canvas, svg { max-width: 100%; }
       modalReplacementIds = Array.isArray(ex.replacementIds) ? ex.replacementIds.slice() : [];
     } else {
       $('exName').value = '';
-      modalDay = state.filterDay;
+      modalDays = [state.filterDay];
       $('exBw').checked = false;
       $('exUnilateral').checked = false;
       $('exDumbbellPair').checked = false;
@@ -3312,12 +3328,12 @@ img, video, canvas, svg { max-width: 100%; }
   $('exModalSave').addEventListener('click', () => {
     const name = $('exName').value.trim();
     if (!name) { alert('Name is required.'); return; }
-    if (!modalDay) { alert('Pick a day.'); return; }
+    if (!modalDays.length) { alert('Pick at least one day.'); return; }
     const isBw = $('exBw').checked;
     const repMin = parseInt($('exRepMin').value, 10) || 6;
     const repMax = parseInt($('exRepMax').value, 10) || 8;
     const data = {
-      name, day: modalDay,
+      name, days: modalDays.slice(),
       bw: isBw,
       unilateral: $('exUnilateral').checked,
       dumbbellPair: isBw ? false : $('exDumbbellPair').checked,
@@ -3337,7 +3353,10 @@ img, video, canvas, svg { max-width: 100%; }
     } else {
       const ex = Object.assign({ id: uid() }, data);
       state.exercises.push(ex);
-      state.filterDay = modalDay;
+      // Jump to one of its days so the new exercise is visible somewhere,
+      // but don't yank the user off a day they're already on if it's one
+      // of the ones picked.
+      if (modalDays.indexOf(state.filterDay) === -1) state.filterDay = modalDays[0];
       savedExId = ex.id;
       // Expand the session list so the newly added exercise is visible
       // right away instead of leaving the user wondering where it went.
@@ -3390,18 +3409,17 @@ img, video, canvas, svg { max-width: 100%; }
       wrap.innerHTML = '<div class="po-empty">No exercises yet.</div>';
       return;
     }
-    const sorted = state.exercises.slice().sort((a, b) =>
-      dayName(a.day).localeCompare(dayName(b.day)) || a.name.localeCompare(b.name)
-    );
+    const sorted = state.exercises.slice().sort((a, b) => a.name.localeCompare(b.name));
     wrap.innerHTML = sorted.map(ex => {
+      const alreadyHere = Array.isArray(ex.days) && ex.days.includes(state.filterDay);
       const actions = libraryMode === 'pick'
-        ? '<button type="button" class="po-btn-secondary" data-action="pick" style="padding:7px 14px;font-size:12px;">' + (ex.day === state.filterDay ? 'Here' : '+ Add') + '</button>'
+        ? '<button type="button" class="po-btn-secondary" data-action="pick" style="padding:7px 14px;font-size:12px;">' + (alreadyHere ? 'Here' : '+ Add') + '</button>'
         : '<button type="button" class="po-ses-icon-btn" data-action="edit" title="Edit" aria-label="Edit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>'
           + '<button type="button" class="po-ses-icon-btn" data-action="delete" title="Delete" aria-label="Delete"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>';
       return '<div class="po-lib-row" data-ex="' + ex.id + '">'
         + '<div class="po-lib-name-wrap">'
         +   '<div class="po-lib-name">' + escape(ex.name) + '</div>'
-        +   '<div class="po-lib-meta">' + escape(dayName(ex.day)) + (ex.bw ? ' &middot; bodyweight' : '') + '</div>'
+        +   '<div class="po-lib-meta">' + escape(daysDisplay(ex)) + (ex.bw ? ' &middot; bodyweight' : '') + '</div>'
         + '</div>'
         + '<div class="po-lib-actions">' + actions + '</div>'
         + '</div>';
@@ -3417,12 +3435,9 @@ img, video, canvas, svg { max-width: 100%; }
     if (libraryMode === 'pick') {
       const pickBtn = e.target.closest('[data-action="pick"]');
       if (!pickBtn) return;
-      if (ex.day === state.filterDay) return; // already on this day, nothing to do
-      const targetDayName = dayName(state.filterDay);
-      if (ex.day) {
-        if (!confirm('Move ' + ex.name + ' from ' + dayName(ex.day) + ' day to ' + targetDayName + ' day?')) return;
-      }
-      ex.day = state.filterDay;
+      if (!Array.isArray(ex.days)) ex.days = [];
+      if (ex.days.includes(state.filterDay)) return; // already on this day, nothing to do
+      ex.days.push(state.filterDay);
       saveState();
       $('libraryModalBg').classList.remove('show');
       $('sessionBody').style.display = 'block';

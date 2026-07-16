@@ -409,7 +409,16 @@ def call_gemini_food(parts):
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        text = result["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = result.get("candidates") or []
+        if not candidates:
+            # No candidates usually means the prompt/image got blocked by
+            # Gemini's safety filters — surface *why* instead of KeyError-ing
+            # on result["candidates"][0] below.
+            feedback = result.get("promptFeedback", {})
+            reason = feedback.get("blockReason", "no response")
+            print(f"[garmin-proxy] Gemini returned no candidates: {result}")
+            return {"error": "Gemini blocked this request (" + str(reason) + ")"}
+        text = candidates[0]["content"]["parts"][0]["text"]
         parsed = parse_food_json(text)
         return {
             "name": str(parsed.get("name", "Food"))[:120],
@@ -421,7 +430,15 @@ def call_gemini_food(parts):
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
         print(f"[garmin-proxy] Gemini API error {e.code}: {detail}")
-        return {"error": "Gemini API error " + str(e.code)}
+        # Pull Gemini's own message out of the error body when present, so
+        # the frontend (and Render logs) show something actionable instead
+        # of a bare "Gemini API error 400".
+        message = None
+        try:
+            message = json.loads(detail).get("error", {}).get("message")
+        except Exception:
+            pass
+        return {"error": "Gemini API error " + str(e.code) + (": " + message[:200] if message else "")}
     except Exception as e:
         print(f"[garmin-proxy] food lookup/analyze failed: {e}")
         return {"error": str(e)}
@@ -466,6 +483,13 @@ def food_analyze():
 
     header, b64data = image_data_url.split(",", 1)
     mime_type = "image/png" if "image/png" in header else "image/jpeg"
+
+    # The frontend downsizes photos before sending, but guard here too in
+    # case an old cached page version, or some other client, sends a raw
+    # multi-MB camera photo straight through — better a clear message than
+    # a confusing 400 from Gemini.
+    if len(b64data) > 8_000_000:
+        return jsonify({"error": "Photo is too large — try again (it should be auto-resized)."}), 400
 
     prompt = (
         "Look at this photo of food and estimate its nutrition facts.\n"

@@ -477,6 +477,48 @@
   }
   .gm-summary-text.is-loading { color: var(--text-tertiary); font-style: italic; }
 
+  /* ---------- Splash screen: shown first on load, the AI summary card's
+     text is mirrored here (same .js-summary-text class) so both stay in
+     sync without a second fetch; Continue just reveals the page beneath,
+     which keeps rendering underneath the whole time. ---------- */
+
+  .splash-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #050506;
+  }
+  .splash-screen.is-hidden { display: none; }
+
+  .splash-inner {
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+  }
+
+  .splash-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .splash-summary-text {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin-bottom: 28px;
+  }
+
+  .splash-continue-btn { width: 100%; }
+
   /* ---------- Component 4: To Do List ---------- */
 
   .section-title {
@@ -770,6 +812,25 @@
   .goal-row:hover .goal-delete { opacity: 0.8; }
   .goal-delete:hover { color: var(--danger); opacity: 1; }
 
+  .goal-date-input {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    opacity: 0.5;
+    cursor: pointer;
+    font-family: inherit;
+    color-scheme: dark;
+    transition: opacity 0.2s ease;
+  }
+  .goal-row:hover .goal-date-input { opacity: 0.85; }
+  .goal-date-input::-webkit-calendar-picker-indicator { opacity: 0.7; cursor: pointer; }
+  /* The native text (mm/dd/yyyy) isn't useful at this size - hide it and
+     just show the calendar icon, which still opens the same picker. */
+  .goal-date-input::-webkit-datetime-edit { display: none; }
+
   .goal-row.is-done {
     opacity: 0.45;
     background: rgba(107,227,164,0.04);
@@ -970,6 +1031,15 @@
 <script src="topbar.js" defer></script>
 </head>
 <body>
+
+<div class="splash-screen" id="splashScreen">
+  <div class="splash-inner">
+    <div class="splash-eyebrow">Today's summary</div>
+    <div class="gm-summary-text js-summary-text splash-summary-text" id="splashSummaryText">Loading&hellip;</div>
+    <button class="gm-btn gm-btn-add splash-continue-btn" id="splashContinueBtn" type="button">Continue</button>
+  </div>
+</div>
+
 <div class="wrap">
 
   <h1 class="dash-title">Home</h1>
@@ -1026,7 +1096,7 @@
       <div class="gm-eyebrow">Today's summary</div>
       <button class="gm-refresh-btn" id="summaryRefreshBtn" type="button" aria-label="Refresh summary" title="Refresh summary">&#8635;</button>
     </div>
-    <div class="gm-summary-text" id="todaySummaryText">Loading&hellip;</div>
+    <div class="gm-summary-text js-summary-text" id="todaySummaryText">Loading&hellip;</div>
   </div>
 
   <div class="section">
@@ -1253,13 +1323,22 @@
   }
 
   function getActiveDateString() {
-    const now = new Date();
-    if (now.getHours() < 6) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 1);
-      return dateToString(d);
+    return activeDateStringFor(new Date());
+  }
+
+  // Same "day doesn't roll over until 6am" rule as getActiveDateString(),
+  // but for an arbitrary point in time (e.g. a task's doneAt timestamp)
+  // instead of always "now". Used so a task completed at 2am still counts
+  // toward the day the user considers "today" rather than the calendar
+  // date, which would otherwise silently disagree with every other "today"
+  // computation in this file and undercount the daily stat.
+  function activeDateStringFor(d) {
+    if (d.getHours() < 6) {
+      const shifted = new Date(d);
+      shifted.setDate(shifted.getDate() - 1);
+      return dateToString(shifted);
     }
-    return dateToString(now);
+    return dateToString(d);
   }
 
   function getTomorrowDateString() {
@@ -1309,7 +1388,7 @@
       (storeGet(key) || []).forEach(function (g) {
         if (!g.done) return;
         const doneDateKey = g.doneAt
-          ? dateToString(new Date(g.doneAt))
+          ? activeDateStringFor(new Date(g.doneAt))
           : (DATE_KEY_RE.test(dateStr) ? dateStr : getActiveDateString());
         log[doneDateKey] = (log[doneDateKey] || 0) + 1;
       });
@@ -1390,7 +1469,7 @@
         storeSet(tKey, today);
       }
       goals.filter(function (g) { return g.done; }).forEach(function (g) {
-        const doneDateKey = g.doneAt ? dateToString(new Date(g.doneAt)) : dateStr;
+        const doneDateKey = g.doneAt ? activeDateStringFor(new Date(g.doneAt)) : dateStr;
         addCompletions(doneDateKey, 1);
       });
       storeDelete(key);
@@ -1550,29 +1629,36 @@
     if (done.length) parts.push(done.length + ' done so far');
     return parts.join(', ') + '.';
   }
+  // Today's summary is shown in two places at once — the splash screen and
+  // the card on the Home page beneath it — so every element sharing this
+  // class gets updated together off a single fetch/cache rather than each
+  // place fetching its own copy.
+  function setSummaryText(text, loading) {
+    document.querySelectorAll('.js-summary-text').forEach(function (el) {
+      el.textContent = text;
+      el.classList.toggle('is-loading', !!loading);
+    });
+  }
   function renderTodaySummary(forceRefresh) {
     const goals = getTodayGoals();
     const left = goals.filter(function (g) { return !g.done; });
     const done = goals.filter(function (g) { return g.done; });
     const context = buildSummaryContext();
     const sig = taskTextSignature(left, done, context);
-    const summaryEl = document.getElementById('todaySummaryText');
     const cache = storeGet(AI_SUMMARY_CACHE_KEY) || {};
 
     if (!forceRefresh && cache.date === getActiveDateString() && cache.sig === sig && cache.text) {
-      summaryEl.textContent = cache.text;
-      summaryEl.classList.remove('is-loading');
+      setSummaryText(cache.text, false);
       return;
     }
     if (!left.length && !done.length) {
-      summaryEl.textContent = fallbackSummaryText(left, done);
-      summaryEl.classList.remove('is-loading');
-      storeSet(AI_SUMMARY_CACHE_KEY, { date: getActiveDateString(), sig: sig, text: summaryEl.textContent });
+      const text = fallbackSummaryText(left, done);
+      setSummaryText(text, false);
+      storeSet(AI_SUMMARY_CACHE_KEY, { date: getActiveDateString(), sig: sig, text: text });
       return;
     }
 
-    summaryEl.textContent = 'Thinking…';
-    summaryEl.classList.add('is-loading');
+    setSummaryText('Thinking…', true);
 
     const controller = new AbortController();
     const timeout = setTimeout(function () { controller.abort(); }, 12000);
@@ -1590,15 +1676,13 @@
       .then(function (res) { return res.json(); })
       .then(function (data) {
         clearTimeout(timeout);
-        summaryEl.classList.remove('is-loading');
         const text = (data && data.summary) ? data.summary : fallbackSummaryText(left, done);
-        summaryEl.textContent = text;
+        setSummaryText(text, false);
         storeSet(AI_SUMMARY_CACHE_KEY, { date: getActiveDateString(), sig: sig, text: text });
       })
       .catch(function () {
         clearTimeout(timeout);
-        summaryEl.classList.remove('is-loading');
-        summaryEl.textContent = fallbackSummaryText(left, done);
+        setSummaryText(fallbackSummaryText(left, done), false);
         // Don't cache the fallback under this signature — once the proxy's
         // reachable again, the next change should get a real shot at it.
       });
@@ -1715,6 +1799,30 @@
     makeInlineEdit(text, key, idx, reload);
     li.appendChild(text);
 
+    // Change date — moves this task between Today/Upcoming/Someday buckets
+    // by relocating it out of its current goals:* array and into the
+    // picked date's (or goals:none for "no date"), then refreshing every
+    // section since the task may now belong to a different one.
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'goal-date-input';
+    dateInput.title = 'Change date';
+    dateInput.value = (key !== noDateKey() && key.indexOf('goals:') === 0) ? key.slice('goals:'.length) : '';
+    dateInput.addEventListener('click', function (e) { e.stopPropagation(); });
+    dateInput.addEventListener('change', function () {
+      const newKey = dateInput.value ? ('goals:' + dateInput.value) : noDateKey();
+      if (newKey === key) return;
+      const fresh = storeGet(key) || [];
+      if (!fresh[idx]) return;
+      const moved = fresh.splice(idx, 1)[0];
+      storeSet(key, fresh);
+      const dest = storeGet(newKey) || [];
+      dest.push(moved);
+      storeSet(newKey, dest);
+      loadToday(); loadUpcoming(); loadNoDate();
+    });
+    li.appendChild(dateInput);
+
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'goal-delete';
@@ -1773,12 +1881,19 @@
 
   const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+  // A task ticked off earlier today should stay visible (checked) so the
+  // user can see what they did, but once the day rolls over it's stale —
+  // same treatment as Today's own list, which never hides done items.
+  function wasCompletedToday(g) {
+    return !!(g.done && g.doneAt && activeDateStringFor(new Date(g.doneAt)) === getActiveDateString());
+  }
+
   function getUpcomingDates() {
     const activeDate = getActiveDateString();
     return storeListKeys('goals:')
       .map(function (k) { return k.slice('goals:'.length); })
       .filter(function (d) { return DATE_KEY_RE.test(d) && d > activeDate; })
-      .filter(function (d) { return (storeGet('goals:' + d) || []).some(function (g) { return !g.done; }); })
+      .filter(function (d) { return (storeGet('goals:' + d) || []).some(function (g) { return !g.done || wasCompletedToday(g); }); })
       .sort();
   }
 
@@ -1787,10 +1902,10 @@
   function noDateKey() { return 'goals:none'; }
   function getNoDateGoals() { return storeGet(noDateKey()) || []; }
 
-  // Completing an Upcoming/Someday task early clears it from view instead
-  // of leaving a checked-off row sitting there — but the stored entry (and
-  // its doneAt) stays put so it still counts correctly once its actual day
-  // arrives (Today) and for the completion stats below.
+  // Completing an Upcoming/Someday task early keeps it visible (checked)
+  // for the rest of the day it was completed on, then it drops out of view
+  // the next day — the stored entry (and its doneAt) stays put either way
+  // so it still counts correctly for the completion stats below.
   function loadNoDate() {
     const key = noDateKey();
     const goals = getNoDateGoals();
@@ -1798,12 +1913,14 @@
     const emptyEl = document.getElementById('emptyStateNoDate');
     listEl.innerHTML = '';
     let pending = 0;
+    let visibleCount = 0;
     goals.forEach(function (g, i) {
-      if (g.done) return;
-      pending++;
+      if (g.done && !wasCompletedToday(g)) return;
+      if (!g.done) pending++;
+      visibleCount++;
       listEl.appendChild(buildGoalRow(g, i, key, loadNoDate));
     });
-    emptyEl.style.display = pending === 0 ? 'block' : 'none';
+    emptyEl.style.display = visibleCount === 0 ? 'block' : 'none';
     document.getElementById('gmNoDateCount').textContent = pending + ' planned';
   }
 
@@ -1829,8 +1946,8 @@
       const list = document.createElement('ul');
       list.className = 'goal-list gm-list';
       goals.forEach(function (g, i) {
-        if (g.done) return;
-        total++;
+        if (g.done && !wasCompletedToday(g)) return;
+        if (!g.done) total++;
         list.appendChild(buildGoalRow(g, i, key, loadUpcoming));
       });
       group.appendChild(list);
@@ -2135,6 +2252,10 @@
     btn.classList.add('spin');
     setTimeout(function () { btn.classList.remove('spin'); }, 650);
     renderTodaySummary(true);
+  });
+
+  document.getElementById('splashContinueBtn').addEventListener('click', function () {
+    document.getElementById('splashScreen').classList.add('is-hidden');
   });
 
   document.getElementById('dayRingEditBtn').addEventListener('click', () => {
