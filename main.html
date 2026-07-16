@@ -831,6 +831,22 @@
      just show the calendar icon, which still opens the same picker. */
   .goal-date-input::-webkit-datetime-edit { display: none; }
 
+  .goal-someday-btn {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    opacity: 0.5;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    transition: opacity 0.2s ease, color 0.2s ease;
+  }
+  .goal-row:hover .goal-someday-btn { opacity: 0.85; }
+  .goal-someday-btn:hover { color: var(--text-primary); opacity: 1; }
+
   .goal-row.is-done {
     opacity: 0.45;
     background: rgba(107,227,164,0.04);
@@ -1803,14 +1819,7 @@
     // by relocating it out of its current goals:* array and into the
     // picked date's (or goals:none for "no date"), then refreshing every
     // section since the task may now belong to a different one.
-    const dateInput = document.createElement('input');
-    dateInput.type = 'date';
-    dateInput.className = 'goal-date-input';
-    dateInput.title = 'Change date';
-    dateInput.value = (key !== noDateKey() && key.indexOf('goals:') === 0) ? key.slice('goals:'.length) : '';
-    dateInput.addEventListener('click', function (e) { e.stopPropagation(); });
-    dateInput.addEventListener('change', function () {
-      const newKey = dateInput.value ? ('goals:' + dateInput.value) : noDateKey();
+    function moveGoalTo(newKey) {
       if (newKey === key) return;
       const fresh = storeGet(key) || [];
       if (!fresh[idx]) return;
@@ -1820,8 +1829,35 @@
       dest.push(moved);
       storeSet(newKey, dest);
       loadToday(); loadUpcoming(); loadNoDate();
+    }
+
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    dateInput.className = 'goal-date-input';
+    dateInput.title = 'Change date';
+    dateInput.value = (key !== noDateKey() && key.indexOf('goals:') === 0) ? key.slice('goals:'.length) : '';
+    dateInput.addEventListener('click', function (e) { e.stopPropagation(); });
+    dateInput.addEventListener('change', function () {
+      moveGoalTo(dateInput.value ? ('goals:' + dateInput.value) : noDateKey());
     });
     li.appendChild(dateInput);
+
+    // A direct "move to Someday" shortcut — clearing a native date input's
+    // value works too, but that clear control isn't reliably visible/tappable
+    // on mobile, so give Someday its own explicit button instead.
+    if (key !== noDateKey()) {
+      const somedayBtn = document.createElement('button');
+      somedayBtn.type = 'button';
+      somedayBtn.className = 'goal-someday-btn';
+      somedayBtn.title = 'Move to Someday (no date)';
+      somedayBtn.setAttribute('aria-label', 'Move to Someday');
+      somedayBtn.textContent = '∞';
+      somedayBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        moveGoalTo(noDateKey());
+      });
+      li.appendChild(somedayBtn);
+    }
 
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
